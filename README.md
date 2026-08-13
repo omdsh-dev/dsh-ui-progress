@@ -1,5 +1,7 @@
 # @dsh-external/dsh-ui-progress
 
+**简体中文** | [English](./README.en.md)
+
 DSH Web UI 会话进度插件：为 DeepSeek Harness 的 Web GUI 的输入框停靠区提供常驻会话进度条，**零核心改动**（纯 client 插件，不触碰 agent-loop）。
 
 ## 版本对应 / Version compatibility
