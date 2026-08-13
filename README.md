@@ -25,7 +25,7 @@ DSH Web UI 会话进度插件：为 DeepSeek Harness 的 Web GUI 的输入框停
 
 > **npm 发版兼容**：兼容 DSH npm 发版 `@deepseek-ai/dsh@0.0.1-rc.5`（dist-tag `next`，即最终快照 snapshot0812 的 npm 发版；`npm exec -p @deepseek-ai/dsh@0.0.1-rc.5 -- dsh --profile web --port <port>` 可访问指定版本并启动，lib 生产模式），同时保持兼容 `@deepseek-ai/dsh@0.0.1-rc.2`（snapshot0811 的 npm 发版）。实测（npm rc.5 基线）：`dsh web` 启动后 `window.__DSH_BOOT__` 清单包含 `@dsh-external/dsh-ui-progress`（inject: `dsh-client-locale`/`dsh-client-runtime`/`dsh-client-ui-conversation`），`/plugins/@dsh-external/dsh-ui-progress/client.js` 返回 200；src 对 rc.5 基线构建产物 typecheck 全绿（本插件已把 cordis 类型导入与 peer 迁移至 `@deepseek-ai/cordis`，见下）。注意：0811 起 vendored cordis 更名为 `@deepseek-ai/cordis`（npm 发版不再发布 `cordis` 名义的 vendored 包），本插件已迁移（peer 声明 `@deepseek-ai/cordis: ^4.0.1-rc.1`，npm rc.5 基线上为 `4.0.1-rc.4`），纯 `npm install` 不再报 ERESOLVE。
 
-> git 依赖方式固定 tag：`pnpm add '@dsh-external/dsh-ui-progress@github:dsh-external/dsh-ui-progress#v0.9.1'`（0809 用户用 `#v0.9.0`，0808 用户用 `#v0.8.0`，0807 用户用 `#v0.6.0`，0805 用户用 `#v0.1.0`）。
+> git 依赖方式固定 tag：`pnpm add '@dsh-external/dsh-ui-progress@github:lhh010/dsh-ui-progress#v0.9.1'`（0809 用户用 `#v0.9.0`，0808 用户用 `#v0.8.0`，0807 用户用 `#v0.6.0`，0805 用户用 `#v0.1.0`）。
 
 ## 0809 兼容要点（snapshot0809，实机验证）
 
@@ -67,7 +67,7 @@ v0.8.0 起本插件**不再注入任何模型可见输入**：`report_progress` 
 
 ## 安装
 
-见 [INSTALL.md](INSTALL.md)（组织内成员）。
+见 [INSTALL.md](INSTALL.md)。
 
 ## 配置
 
