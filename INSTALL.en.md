@@ -12,13 +12,13 @@ Prerequisites: **a built DSH snapshot** (`~/.dsh/source/current` pointing at a s
 
 ```sh
 # 1. Clone the repo; build artifacts are checked in, no build needed
-git clone https://github.com/lhh010/dsh-ui-progress.git
+git clone https://github.com/omdsh-dev/dsh-ui-progress.git
 cd dsh-ui-progress && pnpm install
 
 # 2. Install into the web profile (equivalent to running pnpm add under $DSH_HOME/profiles/web)
 dsh plugin --profile web add link:/path/to/dsh-ui-progress
 #   or as a pinned-tag git dependency:
-#   dsh plugin --profile web add '@dsh-external/dsh-ui-progress@github:lhh010/dsh-ui-progress#v0.9.1'
+#   dsh plugin --profile web add '@dsh-external/dsh-ui-progress@github:omdsh-dev/dsh-ui-progress#v0.9.1'
 ```
 
 > snapshot0809 users pin `#v0.9.0` (0809 build); snapshot0808 users pin `#v0.8.0` (0808 build, also compatible with 0809 hosts); snapshot0807 users pin `#v0.6.0` (old slot contract `conversation.chat.toolview`, not applicable to 0808/0809).
@@ -39,7 +39,7 @@ Configuration line (`$DSH_HOME/profiles/web/cordis.patch.yml`, hot-reloaded, no 
 
 ```sh
 # 1. Clone the repo; build artifacts are checked in, no build needed
-git clone https://github.com/lhh010/dsh-ui-progress.git
+git clone https://github.com/omdsh-dev/dsh-ui-progress.git
 cd dsh-ui-progress && pnpm install
 
 # 2. Get the package into the harness dependency chain (at the DSH snapshot root, the one ~/.dsh/source/current points to)
@@ -53,7 +53,7 @@ pnpm add -w link:/path/to/dsh-ui-progress
 
 ```sh
 # Run at the harness root; <commit> is the release commit (use tag v0.1.0 for 0805)
-pnpm add '@dsh-external/dsh-ui-progress@github:lhh010/dsh-ui-progress#v0.1.0'
+pnpm add '@dsh-external/dsh-ui-progress@github:omdsh-dev/dsh-ui-progress#v0.1.0'
 ```
 
 ### Configuration line (legacy 0805 mechanism)

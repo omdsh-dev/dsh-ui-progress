@@ -12,13 +12,13 @@
 
 ```sh
 # 1. 克隆仓库，构建产物已入库，无需构建
-git clone https://github.com/lhh010/dsh-ui-progress.git
+git clone https://github.com/omdsh-dev/dsh-ui-progress.git
 cd dsh-ui-progress && pnpm install
 
 # 2. 装进 web profile（等价于在 $DSH_HOME/profiles/web 下执行 pnpm add）
 dsh plugin --profile web add link:/path/to/dsh-ui-progress
 #   或固定 tag 的 git 依赖：
-#   dsh plugin --profile web add '@dsh-external/dsh-ui-progress@github:lhh010/dsh-ui-progress#v0.9.1'
+#   dsh plugin --profile web add '@dsh-external/dsh-ui-progress@github:omdsh-dev/dsh-ui-progress#v0.9.1'
 ```
 
 > snapshot0809 用户固定 `#v0.9.0`（0809 构建）；snapshot0808 用户固定 `#v0.8.0`（0808 构建，同样兼容 0809 宿主）；snapshot0807 用户固定 `#v0.6.0`（旧 slot 契约 `conversation.chat.toolview`，不适用于 0808/0809）。
@@ -39,7 +39,7 @@ dsh plugin --profile web add link:/path/to/dsh-ui-progress
 
 ```sh
 # 1. 克隆仓库，构建产物已入库，无需构建
-git clone https://github.com/lhh010/dsh-ui-progress.git
+git clone https://github.com/omdsh-dev/dsh-ui-progress.git
 cd dsh-ui-progress && pnpm install
 
 # 2. 让包装进 harness 依赖链（在 DSH 快照根目录，~/.dsh/source/current 指向的那个）
@@ -53,7 +53,7 @@ pnpm add -w link:/path/to/dsh-ui-progress
 
 ```sh
 # 在 harness 根目录执行；<commit> 为发布 commit（0805 用 tag v0.1.0）
-pnpm add '@dsh-external/dsh-ui-progress@github:lhh010/dsh-ui-progress#v0.1.0'
+pnpm add '@dsh-external/dsh-ui-progress@github:omdsh-dev/dsh-ui-progress#v0.1.0'
 ```
 
 ### 配置行（0805 旧机制）
