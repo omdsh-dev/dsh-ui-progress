@@ -22,7 +22,8 @@ DSH Web UI 会话进度插件：为 DeepSeek Harness 的 Web GUI 的输入框停
 | `v0.8.0` | `snapshots/20260808T121140Z`（snapshot0808） | 新构建：移除自带 `report_progress` 工具与上报引导（宿主 half 置空）、移除工具卡片；填充改为 todos 真实比例（无 todos 默认 100%）；新增中断橘红态（手动打断/API 错误等意外停止） |
 | `v0.9.0` | `snapshots/20260809T140917Z`（snapshot0809） | 新构建（原生 0809）：运行中新增**实时 token 生成速率**（自校准估算 + 1s 滑动窗口平滑，首 token 到达起算，贴近真实 provider usage） |
 | `v0.9.1` | `snapshots/20260810T155924Z`（snapshot0810） | 兼容性构建：客户端插件元数据从顶层 `dshClient` 迁移为嵌套 `dsh.client`（0810 的 ClientModuleHostService 只读该字段；顶层 `dshClient` 被静默忽略），inject/platform 原样保留 |
-| `v0.9.2`（默认） | npm `@deepseek-ai/dsh@0.1.1-rc.1` | 0.1.1-rc.1 实机 boot 验证通过（boot 清单 + client.js 200），依赖的槽位/服务不变 |
+| `v0.9.2` | npm `@deepseek-ai/dsh@0.1.1-rc.1` | 0.1.1-rc.1 实机 boot 验证通过（boot 清单 + client.js 200），依赖的槽位/服务不变 |
+| `v0.9.3`（默认） | npm `@deepseek-ai/dsh@0.1.1-rc.1` | 修复中断检测：0.1.x 的停止不再留旧式节点痕迹，改用 `turn/end reason` 判定中断（见 changelog） |
 
 > **兼容性说明**：`v0.8.0` 构建基于 snapshot0808 开发，同时兼容 snapshot0809（`snapshots/20260809T140917Z`），实机验证通过；`v0.9.0` 为原生 snapshot0809 构建；`v0.9.1` 面向 snapshot0810（`snapshots/20260810T155924Z`，默认版本），同时兼容 snapshot0811（`snapshots/20260811T152241Z`）与最终快照 snapshot0812（`snapshots/20260812T172954Z-final`）——0811 与 0812 实机 boot 验证通过（见下）。
 
@@ -82,6 +83,14 @@ v0.8.0 起本插件**不再注入任何模型可见输入**：`report_progress` 
       name: '@dsh-external/dsh-ui-progress'
 ```
 
+## 更新记录 / Changelog
+
+### 2026-08-20 · v0.9.3 — 修复中断橘红态在 DSH 0.1.1-rc.1 上失效
+
+- **修复**：0.1.x 的 agent-loop 不再为「手动停止」产生旧式节点痕迹——`agent/error` 只在非取消错误时上报（`lastAgentError` 不再填充）、`turn/error` 事件已取消（`turn-error` 节点只在 `turn/end reason: error` 时生成）、工具截断的错误码由 `interrupted` 改为 `ABORTED_BEFORE_DISPATCH`/`TOOL_OUTCOME_UNKNOWN`/`TOOL_NOT_STARTED`（调度器路径的 code 还嵌在 `error.info.code`）。因此无 partial 内容的停止不再触发橘红态
+- **迁移**：中断判定改以 `snapshot.chat.timeline` 中最新回合的 `turn/end reason` 为主信号（`aborted` = 手动停止/取消，`interrupted` = 崩溃修复；0.1.x 起每次停止都会留下 `turn/end` 事件），窗口节点痕迹降级为兼容旧宿主与 error 回合的回退路径，并扩充工具错误码集合（含嵌套 `info.code` 与三个新码，保留旧 `interrupted`）
+- **验证**：新增 12 例单测（reason 主信号 4 例 + 节点回退 8 例），39 例全部通过；typecheck、build 通过；DSH npm `0.1.1-rc.1` 实机核验
+
 ## Export shape
 
 浏览器半 `./client`（`apply`/`inject` 命名空间插件）、空 Node half `./index`、标准 invariant companion `./invariant`。
@@ -89,7 +98,7 @@ v0.8.0 起本插件**不再注入任何模型可见输入**：`report_progress` 
 ## Known Limitations and Deferred Work
 
 - 会话整体进度无专门投影：无 todos 时填充固定 100%，不展示伪百分比；todos 比例只反映当前 todos 列表，不代表会话全程进度。
-- 中断检测按当前窗口 + 最新回合判定：中断回合**既无 partial 内容又无在飞工具调用**时不留痕迹，无法检出；分页/压缩后旧标记被截断，中断态随之消退。处于重试路径（model-retry）的回合不显示中断态。
+- 中断检测按当前窗口 + 最新回合判定（v0.9.3 起以 `turn/end reason` 为主信号，停止即检出，不再依赖节点痕迹）；分页/压缩后旧标记被截断，中断态随之消退；窗口内没有 `turn/end` 事件（如会话被强杀且未修复）时回退到节点痕迹，仍可能漏检。处于重试路径（model-retry）的回合不显示中断态。
 - ETA 完全依赖模型在 `report_progress` 的 `eta` 字段上报：模型不报或报错（非字符串/非正数）就不显示；进度条取窗口内**最近一次**上报的 eta，若最近一次未带 eta 则隐藏（即使更早的上报带过）。
 - 浏览器 half 刷新页面即生效（宿主 half 为空，升级安装无需重启 `dsh web`）。
 - CSS 动效常量（时长/缓动）为本地字面量（当前样式体系尚无 motion token 族）；中断橘红色为 warn/error token 的 `color-mix`（样式体系无独立橘色 token）。

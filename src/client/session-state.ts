@@ -112,33 +112,74 @@ export function progressPercent(snapshot: ConversationSnapshot, todos: readonly 
 }
 
 /**
+ * Turn/end reasons that mean the latest turn was stopped mid-flight. DSH
+ * 0.1.x ends an aborted turn with kind 'aborted' (manual stop/cancel) and a
+ * crash repair closes a cut-short turn with 'interrupted'; both must tint the
+ * bar. 'error' stays out of this set — the turn-error node below covers it.
+ */
+const INTERRUPTED_TURN_REASONS = new Set(['aborted', 'interrupted'])
+
+/**
+ * Tool-result error codes that mark a call cut short by a stop or a crash
+ * repair. 'interrupted' is the pre-0.1.x marker; 0.1.x uses
+ * 'ABORTED_BEFORE_DISPATCH' (call cancelled before dispatch) and the repair
+ * codes 'TOOL_OUTCOME_UNKNOWN' / 'TOOL_NOT_STARTED' (started/never-started
+ * call whose outcome the backend cannot know).
+ */
+const INTERRUPTED_ERROR_CODES = new Set([
+  'interrupted',
+  'ABORTED_BEFORE_DISPATCH',
+  'TOOL_OUTCOME_UNKNOWN',
+  'TOOL_NOT_STARTED',
+])
+
+/**
  * Whether the session's LATEST completed turn was stopped mid-flight — a
- * manual stop, an API failure, or another unexpected break. The runtime
- * leaves three in-window traces: an interrupted assistant node (frozen
- * partial), tool-result nodes with error.code 'interrupted' (in-flight calls
- * cut off), and turn-error nodes (terminal failure); live agent failures
- * with no turn position arrive through lastAgentError. Only the latest
- * completed turn is judged (its turn/end seq is the boundary — derived
- * interruption nodes ride fractional seqs just below it), so an interruption
- * followed by a clean turn does not keep the bar orange. Window-scoped by
- * design — paging or compaction drops old markers; a stop that left neither
- * a partial nor an in-flight call leaves no trace and cannot be detected.
+ * manual stop, an API failure, or another unexpected break.
+ *
+ * Primary signal (DSH 0.1.x): the latest completed turn's `turn/end` reason,
+ * read off the timeline — a stop leaves no per-node trace for every case
+ * (no partial content to freeze, no in-flight call to error), but the turn
+ * always ends with reason 'aborted' (cancel) or 'interrupted' (repair).
+ *
+ * Fallback (windowed node traces, covers older hosts and error-ended turns):
+ * an interrupted assistant node (frozen partial), tool-result nodes whose
+ * error code marks a cut-off call, and turn-error nodes (terminal failure);
+ * live agent failures with no turn position arrive through lastAgentError.
+ * Only the latest completed turn is judged (its turn/end seq is the
+ * boundary — derived interruption nodes ride fractional seqs just below
+ * it), so an interruption followed by a clean turn does not keep the bar
+ * orange. Window-scoped by design — paging or compaction drops old markers.
  */
 export function latestTurnInterrupted(snapshot: ConversationSnapshot): boolean {
   if (snapshot.lastAgentError !== null) return true
+  // Authoritative turn/end reason when the timeline is available.
+  const turns = snapshot.chat?.timeline?.turns
+  if (turns !== undefined) {
+    const latest = [...turns.entries()].sort((a, b) => a[0] - b[0]).at(-1)?.[1]
+    const reason = latest?.end?.data?.reason?.kind
+    if (reason !== undefined && INTERRUPTED_TURN_REASONS.has(reason)) return true
+  }
   // The latest completed in-window turn and the end seq of the turn before
   // it: the previous end seq is the exact lower boundary for the latest
   // turn's own nodes (every later turn's events sit above it).
   const ends = [...snapshot.turnEnds.entries()].sort((a, b) => a[0] - b[0])
-  const latest = ends.at(-1)
-  if (latest === undefined) return false
-  const latestEndSeq = latest[1]
+  const latestEnd = ends.at(-1)
+  if (latestEnd === undefined) return false
+  const latestEndSeq = latestEnd[1]
   const prevEndSeq = ends.at(-2)?.[1] ?? 0
   for (const node of snapshot.nodes) {
     if (node.seq <= prevEndSeq || node.seq > latestEndSeq) continue
     if (node.kind === 'assistant' && node.interrupted === true) return true
     if (node.kind === 'turn-error') return true
-    if (node.kind === 'tool-result' && node.error?.code === 'interrupted') return true
+    if (node.kind === 'tool-result') {
+      // The scheduler-abort shape nests the code under `info`; the repair
+      // shape carries it flat. The runtime may carry fields the declared
+      // type omits, so read both defensively.
+      const err = node.error as { code?: string; info?: { code?: string } } | undefined
+      const code = err?.code ?? err?.info?.code
+      if (code !== undefined && INTERRUPTED_ERROR_CODES.has(code)) return true
+    }
   }
   return false
 }
