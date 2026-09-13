@@ -59,7 +59,8 @@ dsh plugin --profile web add link:/path/to/dsh-ui-progress
 | `v0.9.0` | `snapshots/20260809T140917Z`（snapshot0809） | 新构建（原生 0809）：运行中新增**实时 token 生成速率**（自校准估算 + 1s 滑动窗口平滑，首 token 到达起算，贴近真实 provider usage） |
 | `v0.9.1` | `snapshots/20260810T155924Z`（snapshot0810） | 兼容性构建：客户端插件元数据从顶层 `dshClient` 迁移为嵌套 `dsh.client`（0810 的 ClientModuleHostService 只读该字段；顶层 `dshClient` 被静默忽略），inject/platform 原样保留 |
 | `v0.9.2` | npm `@deepseek-ai/dsh@0.1.1-rc.1` | 0.1.1-rc.1 实机 boot 验证通过（boot 清单 + client.js 200），依赖的槽位/服务不变 |
-| `v0.9.3`（默认） | npm `@deepseek-ai/dsh@0.1.1-rc.1` | 修复中断检测：0.1.x 的停止不再留旧式节点痕迹，改用 `turn/end reason` 判定中断（见 changelog） |
+| `v0.9.3` | npm `@deepseek-ai/dsh@0.1.1-rc.1` | 修复中断检测：0.1.x 的停止不再留旧式节点痕迹，改用 `turn/end reason` 判定中断（见 changelog） |
+| `v0.9.17` | `dsh-v0.1.2-alpha.1`~`alpha.5`、`rc.1`、`0.1.3-alpha.1`~`0.1.5-rc.2` | 声明支持 0.1.5-rc.1~rc.2（npm 已发布，钉版本实机验证；rc.1 为 0.1.5 系列首个候选版本，client 插件面零代码差异；typecheck/build/39 单测全绿，热挂载实机验证） |
 | `v0.10.0`（默认） | `dsh-v0.1.2-alpha.1`~`alpha.5`、`rc.1`、`0.1.3-alpha.1`~`0.1.5-rc.2` | **新功能双发**：①「后台运行中」状态（青色）——主会话完成而子代理树仍在执行时，进度条不再误显就绪绿；②Token 用量徽标 + 悬停/点击明细面板（总量/未缓存输入/缓存读取/缓存写入/输出/缓存命中%，实时更新）。typecheck/45 单测/构建全绿，热挂载实机验证 |
 | `v0.9.16` | `dsh-v0.1.2-alpha.1`~`alpha.5`、`rc.1`、`0.1.3-alpha.1`~`0.1.5-alpha.2` | 声明支持 0.1.5-alpha.2（npm 已发布，钉版本实机验证；alpha.2 改动为 Sidebar 文档预览、模型文件交付、minimal 默认工具调整与 `fs-ext` 安装修复，client 插件面零代码差异；typecheck/build/39 单测全绿，启动清单确认加载） |
 | `v0.9.15` | `dsh-v0.1.2-alpha.1`~`alpha.5`、`rc.1`、`0.1.3-alpha.1`~`0.1.5-alpha.1` | 声明支持 0.1.5-alpha.1（npm 已发布，钉版本实机验证；0.1.5 改动在会话格式 V3 / ctx.agent 移除 / 宿主 bundle 服务路由 `/plugins/??`，client 插件面零代码差异；typecheck/build/单测全绿，启动清单确认加载） |
@@ -151,5 +152,4 @@ v0.8.0 起本插件**不再注入任何模型可见输入**：`report_progress` 
 - ETA 完全依赖模型在 `report_progress` 的 `eta` 字段上报：模型不报或报错（非字符串/非正数）就不显示；进度条取窗口内**最近一次**上报的 eta，若最近一次未带 eta 则隐藏（即使更早的上报带过）。
 - 浏览器 half 刷新页面即生效（宿主 half 为空，升级安装无需重启 `dsh web`）。
 - CSS 动效常量（时长/缓动）为本地字面量（当前样式体系尚无 motion token 族）；中断橘红色为 warn/error token 的 `color-mix`（样式体系无独立橘色 token）。
-`v0.9.17`（默认） | `dsh-v0.1.2-alpha.1`~`alpha.5`、`rc.1`、`0.1.3-alpha.1`~`0.1.5-rc.2` | 声明支持 0.1.5-rc.1~rc.2（npm 已发布，钉版本实机验证；rc.1 为 0.1.5 系列首个候选版本，client 插件面零代码差异；typecheck/build/39 单测全绿，启动清单确认加载；rc.2 兼容性复验通过：rc.2 实机宿主（tag fb2c4b9e）加载确认，无需代码改动） |
 - 实时 token 速率为**估算值**（流式 chunk 无 token 计数）：先按 CJK 感知字符密度起算，一旦有已结算 step 的真实 provider usage 即按密度**自校准**（首个校准 step 之前的首个回合仍为字符启发式）；推理/正文/工具参数一并计入；显示为 1s 滑动窗口平均（本地字面量 `TOKEN_RATE_WINDOW_MS`），非 provider 报告值，回合结束后以核心 StatsLine 的结算 tokens/s 为准。
