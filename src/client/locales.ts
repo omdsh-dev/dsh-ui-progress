@@ -22,6 +22,12 @@ export const zh = {
   'bar.pendingSubagentQuestion': '子代理需要选择',
   'bar.pendingSubagentPlan': '子代理等待计划审阅',
   'bar.pendingSubagentCount': '子代理 {count} 项待处理',
+  'bar.background': '后台运行中 · {count} 个子任务',
+  'token.total': 'Token 用量',
+  'token.uncached': '未缓存输入',
+  'token.cacheRead': '缓存读取',
+  'token.cacheHit': '缓存命中',
+  'token.output': '输出',
 } satisfies Record<string, string>
 
 /** The progress namespace key union. */
@@ -49,4 +55,10 @@ export const en = {
   'bar.pendingSubagentQuestion': 'Subagent needs selection',
   'bar.pendingSubagentPlan': 'Subagent awaiting plan review',
   'bar.pendingSubagentCount': 'Subagent {count} pending',
+  'bar.background': 'Background running · {count} subagent(s)',
+  'token.total': 'Token usage',
+  'token.uncached': 'Uncached input',
+  'token.cacheRead': 'Cache read',
+  'token.cacheHit': 'Cache hit',
+  'token.output': 'Output',
 } satisfies Record<ProgressKey, string>

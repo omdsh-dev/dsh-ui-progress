@@ -17,6 +17,7 @@
     var(--dsh-composer-dock-inset) -
     var(--dsh-composer-dock-inset)
   );
+  position: relative;
   margin: 0 auto;
 }
 
@@ -55,6 +56,31 @@
 
 .bar[data-state='done'] .fill {
   background: var(--dsw-alias-state-success-primary);
+}
+
+/* Background state: the main conversation is idle while descendant
+   subagent sessions keep executing. A calm teal (no warning hue) with a
+   slow glow reading as 'work continues elsewhere'; it outranks the done/idle
+   rests and sits below pending/interrupted. The teal is mixed with the
+   label alias so the glyph stays legible on light and dark themes. */
+.bar[data-state='background'] {
+  --ui-progress-background-fg: color-mix(in srgb, #26c6da 72%, var(--dsw-alias-label-primary) 28%);
+  border-color: color-mix(in srgb, #26c6da 40%, transparent);
+  background: color-mix(in srgb, #26c6da 12%, var(--dsw-alias-bg-base));
+  animation: dsh-session-progress-background-glow 2.4s ease-in-out infinite;
+}
+
+.bar[data-state='background'] .glyph {
+  color: var(--ui-progress-background-fg);
+}
+
+.bar[data-state='background'] .fill {
+  background: var(--ui-progress-background-fg);
+}
+
+@keyframes dsh-session-progress-background-glow {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 14px 0 color-mix(in srgb, #26c6da 35%, transparent); }
 }
 
 /* Pending state: this session or a descendant subagent waits on a human
@@ -255,3 +281,17 @@
   color: var(--dsw-alias-label-secondary);
   white-space: nowrap;
 }
+
+/* Token usage chip (resident total) and its hover/click panel. The panel
+   opens upward over the conversation area; theme aliases keep it legible
+   in light and dark themes. */
+.tokenChip { flex: none; border: 1px solid var(--dsw-alias-border-l1); border-radius: 7px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11px; line-height: 20px; padding: 0 8px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.tokenChip:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.tokenChip[data-pin='true'] { border-color: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-state-business-primary); }
+
+.tokenPanel { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 1300; min-width: 250px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-specific-tip, var(--dsw-alias-bg-base)); box-shadow: var(--dsw-shadow-lv2); }
+
+.tokenRow { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; font-size: 12px; line-height: 22px; color: var(--dsw-alias-label-primary); }
+.tokenRow span:first-child { color: var(--dsw-alias-label-secondary); }
+.tokenHead { font-weight: 600; color: var(--dsw-alias-label-primary) !important; }
+.tokenValue { font-variant-numeric: tabular-nums; }

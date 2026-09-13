@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { ChatSnapshot, ConversationNode } from '@deepseek-ai/dsh-client-ui-chat/client'
-import { latestTurnInterrupted, type ChatLegacy } from '../src/client/session-state.ts'
+import { latestTurnInterrupted, subagentRunningCount, tokenUsageTotals, type ChatLegacy } from '../src/client/session-state.ts'
 
 /** One minimal turn/end event carrying the reason the derivation reads. */
 function turnEnd(turn: number, seq: number, kind: string): unknown {
@@ -125,5 +125,47 @@ describe('latestTurnInterrupted', () => {
     const nodes = [erroredToolResult(3, { name: 'X', code: 'TOOL_OUTCOME_UNKNOWN' })] as ConversationNode[]
     // Latest turn end seq 10; node seq 3 sits in the previous turn's window.
     expect(interrupted({ nodes, turnEnds: new Map([[0, 5], [1, 10]]) })).toBe(false)
+  })
+})
+
+describe("tokenUsageTotals", () => {
+  function turnTail(turn: number, seq: number, usage: unknown): unknown {
+    return { kind: 'turn-tail', seq, time: seq * 1000, data: { turn, tokenUsage: usage } }
+  }
+  function legacyWith(nodes: unknown[]): ChatLegacy {
+    return { nodes: nodes as ChatLegacy["nodes"], turnTimings: new Map(), turnEnds: new Map(), partial: null, runningCalls: [] }
+  }
+  it("sums uncached/output/total across turns", () => {
+    const legacy = legacyWith([turnTail(1, 10, { uncachedInputTokens: 100, outputTokens: 50, totalTokens: 1000 }), turnTail(2, 20, { uncachedInputTokens: 200, outputTokens: 80, totalTokens: 1500 })])
+    const totals = tokenUsageTotals(legacy)
+    expect(totals?.uncachedInputTokens).toBe(300)
+    expect(totals?.outputTokens).toBe(130)
+    expect(totals?.totalTokens).toBe(2500)
+  })
+  it("reports cache-read incomplete when a turn omits the bucket", () => {
+    const legacy = legacyWith([turnTail(1, 10, { uncachedInputTokens: 100, outputTokens: 50, totalTokens: 1000, cacheReadTokens: 900 }), turnTail(2, 20, { uncachedInputTokens: 200, outputTokens: 80, totalTokens: 1500 })])
+    const totals = tokenUsageTotals(legacy)
+    expect(totals?.cacheReadTokens).toBe(900)
+    expect(totals?.cacheReadComplete).toBe(false)
+  })
+  it("returns null when no turn tail carries usage", () => {
+    const legacy = legacyWith([])
+    expect(tokenUsageTotals(legacy)).toBeNull()
+  })
+})
+
+describe("subagentRunningCount", () => {
+  const byId: Record<string, { running?: boolean; parentId?: string; origin?: string }> = {
+    root: { running: false },
+    sub1: { running: true, parentId: 'root', origin: 'subagent' },
+    sub2: { running: false, parentId: 'root', origin: 'subagent' },
+    grand: { running: true, parentId: 'sub2', origin: 'subagent' },
+    other: { running: true, parentId: 'other-root', origin: 'subagent' },
+  }
+  it("counts only running descendants of the root", () => {
+    expect(subagentRunningCount(byId, 'root')).toBe(2)
+  })
+  it("returns 0 for an unknown root", () => {
+    expect(subagentRunningCount(byId, 'nope')).toBe(0)
   })
 })

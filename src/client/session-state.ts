@@ -197,3 +197,84 @@ export function latestTurnInterrupted(
   }
   return false
 }
+
+
+/** Session-wide token accounting aggregated over every completed turn tail. */
+export interface TokenUsageTotals {
+  /** Sum of uncached prompt input across all completed turns. */
+  uncachedInputTokens: number
+  /** Sum of provider-reported output across all completed turns. */
+  outputTokens: number
+  /** Sum of provider-reported totals across all completed turns. */
+  totalTokens: number
+  /** Sum of cache-read tokens over the turns that reported the bucket. */
+  cacheReadTokens: number
+  /** True only when every completed turn reported cache-read tokens; a
+   *  false value means the cache-hit percentage is unavailable (mixed
+   *  providers report different buckets). */
+  cacheReadComplete: boolean
+}
+
+/**
+ * Session-wide token usage, aggregated from every completed turn's
+ * `tokenUsage` accounting (the turn-tail nodes' provider-reported numbers).
+ * Null when no completed turn carries accounting (nothing to show).
+ */
+export function tokenUsageTotals(legacy: ChatLegacy): TokenUsageTotals | null {
+  let uncachedInputTokens = 0
+  let outputTokens = 0
+  let totalTokens = 0
+  let cacheReadTokens = 0
+  let cacheReadComplete = true
+  let turns = 0
+  for (const node of legacy.nodes) {
+    // The conversation client's node union predates turn tails — read the
+    // runtime shape defensively (same pattern as the tool-result error
+    // codes in latestTurnInterrupted).
+    if ((node as { kind?: string }).kind !== 'turn-tail') continue
+    const usage = (node as { data?: { tokenUsage?: {
+      uncachedInputTokens?: number; outputTokens?: number; totalTokens?: number; cacheReadTokens?: number
+    } | null } }).data?.tokenUsage
+    if (usage === undefined || usage === null) continue
+    turns += 1
+    uncachedInputTokens += usage.uncachedInputTokens ?? 0
+    outputTokens += usage.outputTokens ?? 0
+    totalTokens += usage.totalTokens ?? 0
+    if (typeof usage.cacheReadTokens === 'number') cacheReadTokens += usage.cacheReadTokens
+    else cacheReadComplete = false
+  }
+  if (turns === 0) return null
+  return { uncachedInputTokens, outputTokens, totalTokens, cacheReadTokens, cacheReadComplete }
+}
+
+/**
+ * Descendant subagent sessions of the given root that are still running —
+ * the background-work signal: the main conversation is idle while its
+ * subagent subtree keeps executing. The sidebar hides subagent rows, so the
+ * progress strip is where this state surfaces.
+ */
+export function subagentRunningCount(
+  byId: Record<string, { running?: boolean; parentId?: string; origin?: string }>,
+  rootId: string,
+): number {
+  const children = new Map<string, string[]>()
+  for (const [sid, row] of Object.entries(byId)) {
+    if (row.parentId === undefined || row.origin !== 'subagent') continue
+    const list = children.get(row.parentId) ?? []
+    list.push(sid)
+    children.set(row.parentId, list)
+  }
+  const seen = new Set<string>([rootId])
+  const queue: string[] = [rootId]
+  let running = 0
+  while (queue.length > 0) {
+    const id = queue.shift() as string
+    for (const childId of children.get(id) ?? []) {
+      if (seen.has(childId)) continue
+      seen.add(childId)
+      queue.push(childId)
+      if (byId[childId]?.running === true) running += 1
+    }
+  }
+  return running
+}

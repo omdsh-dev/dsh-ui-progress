@@ -56,10 +56,11 @@ import type { SessionPendingInteraction } from '@deepseek-ai/dsh-client-ui-sessi
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import clsx from 'clsx'
+import { useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import css from './SessionProgressBar.module.css'
 import {
-  isReasoning, lastTurnDuration, latestReportEta, latestTurnInterrupted, progressPercent,
+  isReasoning, lastTurnDuration, latestReportEta, latestTurnInterrupted, progressPercent, subagentRunningCount, tokenUsageTotals,
   runningTool, runningTurnStart, settledToolCount, todoCounts, type ChatLegacy,
 } from './session-state.ts'
 import { formatElapsed, TOKEN_RATE_WINDOW_MS, useFirstTokenAt, useNow, useWindowedTokenRate } from './timing.ts'
@@ -181,6 +182,14 @@ function stateLabel(
   return t('bar.idle')
 }
 
+/** Compact token count: 271904215 -> '271.9M', 355950 -> '356.0K'. */
+function formatTokenCount(n: number): string {
+  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B'
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K'
+  return String(n)
+}
+
 /**
  * Resident progress strip. Renders nothing until a session snapshot exists
  * (the no-session hero has no dock content), then shows the state text, the
@@ -231,6 +240,28 @@ export function SessionProgressBar({
   // API failure, or another unexpected break) — orange-red, outranks the
   // running/done rests so the stop cannot be missed.
   const interrupted = !running && latestTurnInterrupted(chat, legacy, session.lastAgentError)
+  // Background state: this main conversation is idle while descendant
+  // subagent sessions keep executing — the strip must not read 会话就绪
+  // (the green done rest) while background work is still running.
+  const subRunning = subagentRunningCount(useSessions(s => s.byId) as unknown as Record<string, { running?: boolean; parentId?: string; origin?: string }>, sessionId)
+  const background = !running && subRunning > 0
+  // Session-wide token usage (per-turn provider accounting from the turn
+  // tails) behind a hover/click panel: the chip shows the running total,
+  // the panel breaks it down uncached/cache-read/output with the cache-hit
+  // percentage. Pin via click; hover previews and auto-hides.
+  const tokenTotals = tokenUsageTotals(legacy)
+  const [tokenPinned, setTokenPinned] = useState(false)
+  const [tokenHover, setTokenHover] = useState(false)
+  const tokenHoverTimer = useRef<number | undefined>(undefined)
+  /** Schedule the hover preview to close; the panel or chip re-enter cancels. */
+  const scheduleTokenHide = (): void => {
+    tokenHoverTimer.current = window.setTimeout(() => { setTokenHover(false) }, 120)
+  }
+  /** Cancel a scheduled hover close (pointer moved onto the panel/chip). */
+  const cancelTokenHide = (): void => {
+    if (tokenHoverTimer.current !== undefined) { window.clearTimeout(tokenHoverTimer.current); tokenHoverTimer.current = undefined }
+  }
+  const tokenPanelOpen = tokenPinned || tokenHover
   // Live tokens/sec since the first visible token, self-calibrated to the
   // model's real tokenizer density (latest settled step's provider usage
   // over its weighted chars scales the partial; CJK-aware heuristic before
@@ -248,13 +279,13 @@ export function SessionProgressBar({
     <div className={css.dock} data-progress-bar>
       <div
         className={css.bar}
-        data-state={pending ? 'pending' : running ? 'running' : interrupted ? 'interrupted' : completed ? 'done' : 'idle'}
+        data-state={pending ? 'pending' : running ? 'running' : interrupted ? 'interrupted' : background ? 'background' : completed ? 'done' : 'idle'}
       >
-        <span className={clsx(css.glyph, running && css.glyphRunning)}>
-          {running ? <IconLoadingOutline16 size={14} /> : interrupted ? <IconWarningOutline16 size={14} /> : <IconSparkle16 size={14} />}
+        <span className={clsx(css.glyph, (running || background) && css.glyphRunning)}>
+          {running || background ? <IconLoadingOutline16 size={14} /> : interrupted ? <IconWarningOutline16 size={14} /> : <IconSparkle16 size={14} />}
         </span>
         <span className={css.label}>
-          {pending ? pendingLabel(ownPending, subPending, t) : interrupted ? t('bar.interrupted') : stateLabel(running, toolName, thinking, counts, t)}
+          {pending ? pendingLabel(ownPending, subPending, t) : interrupted ? t('bar.interrupted') : background ? t('bar.background', { count: subRunning }) : stateLabel(running, toolName, thinking, counts, t)}
         </span>
         <div className={css.track} role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
           <div
@@ -270,7 +301,31 @@ export function SessionProgressBar({
         {!running && lastTurn !== null && <span className={css.counter}>{t('bar.lastTurn', { duration: formatElapsed(lastTurn) })}</span>}
         <span className={css.counter}>{t('bar.turn', { turn })}</span>
         <span className={css.counter}>{t('bar.tools', { count: settled })}</span>
+        {tokenTotals !== null && tokenTotals.totalTokens > 0 && (
+          <button
+            type="button"
+            className={css.tokenChip}
+            data-pin={tokenPinned ? 'true' : undefined}
+            aria-expanded={tokenPanelOpen}
+            title={t('token.total')}
+            onClick={() => { setTokenPinned(v => !v) }}
+            onMouseEnter={() => { setTokenHover(true) }}
+            onMouseLeave={() => { scheduleTokenHide() }}
+          >
+            Σ {formatTokenCount(tokenTotals.totalTokens)}
+          </button>
+        )}
       </div>
+      {tokenTotals !== null && tokenTotals.totalTokens > 0 && tokenPanelOpen && (
+        <div className={css.tokenPanel} role="dialog" aria-label={t('token.total')}
+          onMouseEnter={() => { cancelTokenHide() }} onMouseLeave={() => { scheduleTokenHide() }}>
+          <div className={css.tokenRow}><span className={css.tokenHead}>{t('token.total')}</span><span className={css.tokenValue}>{tokenTotals.totalTokens.toLocaleString('en-US')} tok</span></div>
+          <div className={css.tokenRow}><span>{t('token.uncached')}</span><span className={css.tokenValue}>{tokenTotals.uncachedInputTokens.toLocaleString('en-US')} tok</span></div>
+          <div className={css.tokenRow}><span>{t('token.cacheRead')}</span><span className={css.tokenValue}>{tokenTotals.cacheReadTokens.toLocaleString('en-US')} tok</span></div>
+          <div className={css.tokenRow}><span>{t('token.output')}</span><span className={css.tokenValue}>{tokenTotals.outputTokens.toLocaleString('en-US')} tok</span></div>
+          <div className={css.tokenRow}><span>{t('token.cacheHit')}</span><span className={css.tokenValue}>{tokenTotals.cacheReadComplete && tokenTotals.totalTokens > 0 ? Math.round(tokenTotals.cacheReadTokens / tokenTotals.totalTokens * 100) + '%' : '—'}</span></div>
+        </div>
+      )}
     </div>
   )
 }
