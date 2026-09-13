@@ -50,7 +50,7 @@
  * anchor the core uses for its settled tokens/s, the live number is directly
  * comparable to the post-turn value on the conversation StatsLine.
  */
-import { IconLoadingOutline16, IconSparkle16, IconWarningOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconDatabaseOutline16, IconLoadingOutline16, IconSparkle16, IconWarningOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionPendingInteraction } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -312,7 +312,8 @@ export function SessionProgressBar({
             onMouseEnter={() => { setTokenHover(true) }}
             onMouseLeave={() => { scheduleTokenHide() }}
           >
-            Σ {formatTokenCount(tokenTotals.totalTokens)}
+            <IconDatabaseOutline16 size={12} />
+            {formatTokenCount(tokenTotals.totalTokens)}
           </button>
         )}
       </div>
