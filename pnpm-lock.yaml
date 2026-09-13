@@ -47,6 +47,9 @@ importers:
       '@deepseek-ai/dsh-session':
         specifier: link:../.dsh/source/current/packages/core/session
         version: link:../.dsh/source/current/packages/core/session
+      '@deepseek-ai/dsh-token-meter':
+        specifier: link:../test-lhh010/packages/llm/token-meter
+        version: link:../test-lhh010/packages/llm/token-meter
       '@deepseek-ai/dsh-tool-todo':
         specifier: link:../.dsh/source/current/packages/todo/tool-todo
         version: link:../.dsh/source/current/packages/todo/tool-todo

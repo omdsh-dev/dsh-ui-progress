@@ -52,6 +52,8 @@
  */
 import { IconDatabaseOutline16, IconLoadingOutline16, IconSparkle16, IconWarningOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
+// Type-only: merges the tokenUsage key into SessionProjectionMap for useProjection.
+import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
 import type { SessionPendingInteraction } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -245,11 +247,14 @@ export function SessionProgressBar({
   // (the green done rest) while background work is still running.
   const subRunning = subagentRunningCount(useSessions(s => s.byId) as unknown as Record<string, { running?: boolean; parentId?: string; origin?: string }>, sessionId)
   const background = !running && subRunning > 0
-  // Session-wide token usage (per-turn provider accounting from the turn
-  // tails) behind a hover/click panel: the chip shows the running total,
-  // the panel breaks it down uncached/cache-read/output with the cache-hit
-  // percentage. Pin via click; hover previews and auto-hides.
-  const tokenTotals = tokenUsageTotals(chat)
+  // Session-wide token usage behind a hover/click panel: the chip shows
+  // the running total, the panel breaks it down uncached/cache-read/write
+  // and output with the cache-hit percentage. The durable tokenUsage
+  // projection updates as each assistant step settles, so the panel moves
+  // during a running turn instead of only at turn end.
+  const usage = useProjection('tokenUsage')
+  const billedInput = usage === undefined ? 0 : usage.uncachedInputTokens + usage.cacheReadTokens + usage.cacheWriteTokens
+  const tokenTotals = usage === undefined ? null : { total: billedInput + usage.outputTokens, uncached: usage.uncachedInputTokens, cacheRead: usage.cacheReadTokens, cacheWrite: usage.cacheWriteTokens, output: usage.outputTokens, billedInput }
   const [tokenPinned, setTokenPinned] = useState(false)
   const [tokenHover, setTokenHover] = useState(false)
   const tokenHoverTimer = useRef<number | undefined>(undefined)
@@ -301,7 +306,7 @@ export function SessionProgressBar({
         {!running && lastTurn !== null && <span className={css.counter}>{t('bar.lastTurn', { duration: formatElapsed(lastTurn) })}</span>}
         <span className={css.counter}>{t('bar.turn', { turn })}</span>
         <span className={css.counter}>{t('bar.tools', { count: settled })}</span>
-        {tokenTotals !== null && tokenTotals.totalTokens > 0 && (
+        {tokenTotals !== null && tokenTotals.total > 0 && (
           <button
             type="button"
             className={css.tokenChip}
@@ -313,18 +318,19 @@ export function SessionProgressBar({
             onMouseLeave={() => { scheduleTokenHide() }}
           >
             <IconDatabaseOutline16 size={12} />
-            {formatTokenCount(tokenTotals.totalTokens)}
+            {formatTokenCount(tokenTotals.total)}
           </button>
         )}
       </div>
-      {tokenTotals !== null && tokenTotals.totalTokens > 0 && tokenPanelOpen && (
+      {tokenTotals !== null && tokenTotals.total > 0 && tokenPanelOpen && (
         <div className={css.tokenPanel} role="dialog" aria-label={t('token.total')}
           onMouseEnter={() => { cancelTokenHide() }} onMouseLeave={() => { scheduleTokenHide() }}>
-          <div className={css.tokenRow}><span className={css.tokenHead}>{t('token.total')}</span><span className={css.tokenValue}>{tokenTotals.totalTokens.toLocaleString('en-US')} tok</span></div>
-          <div className={css.tokenRow}><span>{t('token.uncached')}</span><span className={css.tokenValue}>{tokenTotals.uncachedInputTokens.toLocaleString('en-US')} tok</span></div>
-          <div className={css.tokenRow}><span>{t('token.cacheRead')}</span><span className={css.tokenValue}>{tokenTotals.cacheReadTokens.toLocaleString('en-US')} tok</span></div>
-          <div className={css.tokenRow}><span>{t('token.output')}</span><span className={css.tokenValue}>{tokenTotals.outputTokens.toLocaleString('en-US')} tok</span></div>
-          <div className={css.tokenRow}><span>{t('token.cacheHit')}</span><span className={css.tokenValue}>{tokenTotals.cacheReadComplete && tokenTotals.totalTokens > 0 ? Math.round(tokenTotals.cacheReadTokens / tokenTotals.totalTokens * 100) + '%' : '—'}</span></div>
+          <div className={css.tokenRow}><span className={css.tokenHead}>{t('token.total')}</span><span className={css.tokenValue}>{tokenTotals.total.toLocaleString('en-US')} tok</span></div>
+          <div className={css.tokenRow}><span>{t('token.uncached')}</span><span className={css.tokenValue}>{tokenTotals.uncached.toLocaleString('en-US')} tok</span></div>
+          <div className={css.tokenRow}><span>{t('token.cacheRead')}</span><span className={css.tokenValue}>{tokenTotals.cacheRead.toLocaleString('en-US')} tok</span></div>
+          <div className={css.tokenRow}><span>{t('token.cacheWrite')}</span><span className={css.tokenValue}>{tokenTotals.cacheWrite.toLocaleString('en-US')} tok</span></div>
+          <div className={css.tokenRow}><span>{t('token.output')}</span><span className={css.tokenValue}>{tokenTotals.output.toLocaleString('en-US')} tok</span></div>
+          <div className={css.tokenRow}><span>{t('token.cacheHit')}</span><span className={css.tokenValue}>{tokenTotals.billedInput > 0 ? Math.round(tokenTotals.cacheRead / tokenTotals.billedInput * 100) + '%' : '—'}</span></div>
         </div>
       )}
     </div>

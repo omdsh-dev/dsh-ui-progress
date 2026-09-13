@@ -26,6 +26,7 @@ export const zh = {
   'token.total': 'Token 用量',
   'token.uncached': '未缓存输入',
   'token.cacheRead': '缓存读取',
+  'token.cacheWrite': '缓存写入',
   'token.cacheHit': '缓存命中',
   'token.output': '输出',
 } satisfies Record<string, string>
@@ -59,6 +60,7 @@ export const en = {
   'token.total': 'Token usage',
   'token.uncached': 'Uncached input',
   'token.cacheRead': 'Cache read',
+  'token.cacheWrite': 'Cache write',
   'token.cacheHit': 'Cache hit',
   'token.output': 'Output',
 } satisfies Record<ProgressKey, string>
