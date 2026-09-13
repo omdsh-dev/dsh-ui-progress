@@ -129,28 +129,31 @@ describe('latestTurnInterrupted', () => {
 })
 
 describe("tokenUsageTotals", () => {
-  function turnTail(turn: number, seq: number, usage: unknown): unknown {
-    return { kind: 'turn-tail', seq, time: seq * 1000, data: { turn, tokenUsage: usage } }
+  function turnWith(turn: number, usage: unknown): unknown {
+    return { turn, start: undefined, end: undefined, status: 'closed', steps: [], data: { get: (key: string) => key === 'turn-tail' ? { turn, tokenUsage: usage } : undefined } }
   }
-  function legacyWith(nodes: unknown[]): ChatLegacy {
-    return { nodes: nodes as ChatLegacy["nodes"], turnTimings: new Map(), turnEnds: new Map(), partial: null, runningCalls: [] }
+  function chatWith(turns: unknown[]): ChatSnapshot {
+    return { timeline: { turnOrder: turns.map((_, i) => i + 1), turns: new Map(turns.map((tn, i) => [i + 1, tn])) } } as unknown as ChatSnapshot
   }
   it("sums uncached/output/total across turns", () => {
-    const legacy = legacyWith([turnTail(1, 10, { uncachedInputTokens: 100, outputTokens: 50, totalTokens: 1000 }), turnTail(2, 20, { uncachedInputTokens: 200, outputTokens: 80, totalTokens: 1500 })])
-    const totals = tokenUsageTotals(legacy)
+    const chat = chatWith([turnWith(1, { uncachedInputTokens: 100, outputTokens: 50, totalTokens: 1000 }), turnWith(2, { uncachedInputTokens: 200, outputTokens: 80, totalTokens: 1500 })])
+    const totals = tokenUsageTotals(chat)
     expect(totals?.uncachedInputTokens).toBe(300)
     expect(totals?.outputTokens).toBe(130)
     expect(totals?.totalTokens).toBe(2500)
   })
   it("reports cache-read incomplete when a turn omits the bucket", () => {
-    const legacy = legacyWith([turnTail(1, 10, { uncachedInputTokens: 100, outputTokens: 50, totalTokens: 1000, cacheReadTokens: 900 }), turnTail(2, 20, { uncachedInputTokens: 200, outputTokens: 80, totalTokens: 1500 })])
-    const totals = tokenUsageTotals(legacy)
+    const chat = chatWith([turnWith(1, { uncachedInputTokens: 100, outputTokens: 50, totalTokens: 1000, cacheReadTokens: 900 }), turnWith(2, { uncachedInputTokens: 200, outputTokens: 80, totalTokens: 1500 })])
+    const totals = tokenUsageTotals(chat)
     expect(totals?.cacheReadTokens).toBe(900)
     expect(totals?.cacheReadComplete).toBe(false)
   })
-  it("returns null when no turn tail carries usage", () => {
-    const legacy = legacyWith([])
-    expect(tokenUsageTotals(legacy)).toBeNull()
+  it("returns null when no turn carries usage", () => {
+    const chat = chatWith([turnWith(1, undefined)])
+    expect(tokenUsageTotals(chat)).toBeNull()
+  })
+  it("returns null for an undefined snapshot", () => {
+    expect(tokenUsageTotals(undefined)).toBeNull()
   })
 })
 

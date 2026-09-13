@@ -217,24 +217,20 @@ export interface TokenUsageTotals {
 
 /**
  * Session-wide token usage, aggregated from every completed turn's
- * `tokenUsage` accounting (the turn-tail nodes' provider-reported numbers).
- * Null when no completed turn carries accounting (nothing to show).
+ * `tokenUsage` accounting read off the timeline turn's data store (turn
+ * tails contribute no legacy nodes). Null when no completed turn carries
+ * accounting (nothing to show).
  */
-export function tokenUsageTotals(legacy: ChatLegacy): TokenUsageTotals | null {
+export function tokenUsageTotals(chat: ChatSnapshot | undefined): TokenUsageTotals | null {
+  if (chat === undefined) return null
   let uncachedInputTokens = 0
   let outputTokens = 0
   let totalTokens = 0
   let cacheReadTokens = 0
   let cacheReadComplete = true
   let turns = 0
-  for (const node of legacy.nodes) {
-    // The conversation client's node union predates turn tails — read the
-    // runtime shape defensively (same pattern as the tool-result error
-    // codes in latestTurnInterrupted).
-    if ((node as { kind?: string }).kind !== 'turn-tail') continue
-    const usage = (node as { data?: { tokenUsage?: {
-      uncachedInputTokens?: number; outputTokens?: number; totalTokens?: number; cacheReadTokens?: number
-    } | null } }).data?.tokenUsage
+  for (const [, turn] of chat.timeline.turns) {
+    const usage = turn.data.get('turn-tail')?.tokenUsage
     if (usage === undefined || usage === null) continue
     turns += 1
     uncachedInputTokens += usage.uncachedInputTokens ?? 0

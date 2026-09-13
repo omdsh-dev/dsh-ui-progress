@@ -249,7 +249,7 @@ export function SessionProgressBar({
   // tails) behind a hover/click panel: the chip shows the running total,
   // the panel breaks it down uncached/cache-read/output with the cache-hit
   // percentage. Pin via click; hover previews and auto-hides.
-  const tokenTotals = tokenUsageTotals(legacy)
+  const tokenTotals = tokenUsageTotals(chat)
   const [tokenPinned, setTokenPinned] = useState(false)
   const [tokenHover, setTokenHover] = useState(false)
   const tokenHoverTimer = useRef<number | undefined>(undefined)
