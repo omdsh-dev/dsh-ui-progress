@@ -125,23 +125,29 @@
    orange-red palette with a slow attention pulse; it outranks the running
    and done states so the stop cannot be missed. The token system has no
    dedicated orange, so the palette is a warn/error mix (the strip's custom
-   property is scoped to this state and reused by the keyframes). */
-.bar[data-state='interrupted'] {
+   property is scoped to this state and reused by the keyframes). The
+   'error' state (terminal turn failure, distinct label 出错) shares the
+   palette — both are attention-red stops. */
+.bar[data-state='interrupted'],
+.bar[data-state='error'] {
   --ui-progress-interrupted: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 45%, var(--dsw-alias-state-error-primary));
   border-color: color-mix(in srgb, var(--ui-progress-interrupted) 40%, transparent);
   background: color-mix(in srgb, var(--dsw-alias-state-warn-tertiary) 85%, var(--dsw-alias-state-error-secondary));
   animation: dsh-session-progress-interrupted-glow 1.6s ease-in-out infinite;
 }
 
-.bar[data-state='interrupted'] .glyph {
+.bar[data-state='interrupted'] .glyph,
+.bar[data-state='error'] .glyph {
   color: var(--ui-progress-interrupted);
 }
 
-.bar[data-state='interrupted'] .fill {
+.bar[data-state='interrupted'] .fill,
+.bar[data-state='error'] .fill {
   background: var(--ui-progress-interrupted);
 }
 
-.bar[data-state='interrupted'] .percent {
+.bar[data-state='interrupted'] .percent,
+.bar[data-state='error'] .percent {
   color: var(--ui-progress-interrupted);
 }
 

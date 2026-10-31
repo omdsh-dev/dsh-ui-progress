@@ -77,7 +77,7 @@ import { useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import css from './SessionProgressBar.module.css'
 import {
-  isReasoning, lastTurnDuration, latestReportEta, latestTurnInterrupted, progressPercent, subagentRunningCount, tokenUsageTotals,
+  isReasoning, lastTurnDuration, latestReportEta, latestTurnStop, progressPercent, subagentRunningCount, tokenUsageTotals,
   runningTool, runningTurnStart, settledToolCount, todoCounts, type ChatLegacy,
 } from './session-state.ts'
 import { formatElapsed, TOKEN_RATE_WINDOW_MS, useFirstTokenAt, useNow, useWindowedTokenRate } from './timing.ts'
@@ -263,10 +263,14 @@ export function SessionProgressBar({
   const sessionsById = useSessions?.(s => s.byId) ?? EMPTY_BY_ID
   const subPending = subagentPendingState(sessionsById, pendingBySession, sessionId)
   const pending = ownPending !== null || subPending.approvals + subPending.questions + subPending.plans > 0
-  // Interrupted state: the latest completed turn was stopped (manual stop,
-  // API failure, or another unexpected break) — orange-red, outranks the
-  // running/done rests so the stop cannot be missed.
-  const interrupted = !running && latestTurnInterrupted(chat, legacy, session.lastAgentError)
+  // Stop state: the latest completed turn ended interrupted (manual stop or
+  // crash repair) or on an error (provider failure, API throttling) —
+  // orange-red, outranks the running/done rests so the stop cannot be
+  // missed. A transient 429 whose successor turn already began reads null
+  // (see latestTurnStop) and the strip follows the successor.
+  const stop = !running ? latestTurnStop(chat, legacy, session.lastAgentError) : null
+  const interrupted = stop === 'interrupted'
+  const errored = stop === 'error'
   // Background state: this main conversation is idle while descendant
   // subagent sessions keep executing — the strip must not read 会话就绪
   // (the green done rest) while background work is still running.
@@ -314,13 +318,13 @@ export function SessionProgressBar({
     <div className={css.dock} data-progress-bar>
       <div
         className={css.bar}
-        data-state={pending ? 'pending' : running ? 'running' : interrupted ? 'interrupted' : background ? 'background' : completed ? 'done' : 'idle'}
+        data-state={pending ? 'pending' : running ? 'running' : interrupted ? 'interrupted' : errored ? 'error' : background ? 'background' : completed ? 'done' : 'idle'}
       >
         <span className={clsx(css.glyph, (running || background) && css.glyphRunning)}>
-          {running || background ? <IconLoading size={14} /> : interrupted ? <IconWarning size={14} /> : <IconSparkle size={14} />}
+          {running || background ? <IconLoading size={14} /> : interrupted || errored ? <IconWarning size={14} /> : <IconSparkle size={14} />}
         </span>
         <span className={css.label}>
-          {pending ? pendingLabel(ownPending, subPending, t) : interrupted ? t('bar.interrupted') : background ? t('bar.background', { count: backgroundCount }) : stateLabel(running, toolName, thinking, counts, t)}
+          {pending ? pendingLabel(ownPending, subPending, t) : interrupted ? t('bar.interrupted') : errored ? t('bar.error') : background ? t('bar.background', { count: backgroundCount }) : stateLabel(running, toolName, thinking, counts, t)}
         </span>
         <div className={css.track} role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
           <div

@@ -1,21 +1,28 @@
 /**
- * Unit tests for the interruption derivation (`latestTurnInterrupted`): the
- * DSH 0.1.x turn/end reason from the Chat view timeline is the authoritative
- * signal (a stop leaves no per-node trace for every case), lastAgentError
- * comes from the Session lifecycle snapshot, and the windowed node traces
- * remain the fallback for older hosts and error-ended turns.
+ * Unit tests for the stop-kind derivation (`latestTurnStop`): the DSH 0.1.x
+ * turn/end reason from the Chat view timeline is the authoritative signal
+ * (a stop leaves no per-node trace for every case), lastAgentError comes
+ * from the Session lifecycle snapshot, and the windowed node traces remain
+ * the fallback for older hosts. 'interrupted' (manual stop / repair) and
+ * 'error' (terminal failure) are distinct kinds; a transient error whose
+ * successor turn already began reads null.
  */
 import { describe, expect, it } from 'vitest'
 import type { ChatSnapshot, ConversationNode } from '@deepseek-ai/dsh-client-ui-chat/client'
-import { latestTurnInterrupted, subagentRunningCount, tokenUsageTotals, type ChatLegacy } from '../src/client/session-state.ts'
+import { latestTurnStop, subagentRunningCount, tokenUsageTotals, type ChatLegacy, type TurnStopKind } from '../src/client/session-state.ts'
 
 /** One minimal turn/end event carrying the reason the derivation reads. */
 function turnEnd(turn: number, seq: number, kind: string): unknown {
   return { type: 'turn/end', seq, time: seq * 1000, data: { turn, reason: { kind } } }
 }
 
+/** One minimal turn/start event. */
+function turnStart(turn: number, seq: number): unknown {
+  return { type: 'turn/start', seq, time: seq * 1000, data: { turn } }
+}
+
 /** The derivation's data slice: Chat snapshot (timeline), legacy projection, session error. */
-interface InterruptSlice {
+interface StopSlice {
   chat: ChatSnapshot | undefined
   legacy: ChatLegacy
   lastAgentError: string | null
@@ -24,16 +31,20 @@ interface InterruptSlice {
 /** A slice with an optional timeline reason and optional windowed traces. */
 function makeSlice(overrides: {
   reason?: string
+  successorStarted?: boolean
   lastAgentError?: string | null
   nodes?: readonly ConversationNode[]
   turnEnds?: ReadonlyMap<number, number>
-} = {}): InterruptSlice {
+} = {}): StopSlice {
   const timeline = overrides.reason === undefined
-    ? { turnOrder: [], turns: new Map() }
-    : {
-        turnOrder: [1],
-        turns: new Map([[1, { turn: 1, start: undefined, end: turnEnd(1, 10, overrides.reason), status: 'closed', steps: [], data: {} }]]),
+    ? { turnOrder: [] as number[], turns: new Map<number, unknown>() }
+    : (() => {
+      const entries: Array<[number, unknown]> = [[1, { turn: 1, start: undefined, end: turnEnd(1, 10, overrides.reason), status: 'closed', steps: [], data: {} }]]
+      if (overrides.successorStarted === true) {
+        entries.push([2, { turn: 2, start: turnStart(2, 11), end: undefined, status: 'running', steps: [], data: {} }])
       }
+      return { turnOrder: entries.map(([k]) => k), turns: new Map<number, unknown>(entries) }
+    })()
   return {
     chat: { timeline } as unknown as ChatSnapshot,
     legacy: {
@@ -48,9 +59,9 @@ function makeSlice(overrides: {
 }
 
 /** Run the derivation over one slice. */
-function interrupted(overrides: Parameters<typeof makeSlice>[0] = {}): boolean {
+function stop(overrides: Parameters<typeof makeSlice>[0] = {}): TurnStopKind | null {
   const { chat, legacy, lastAgentError } = makeSlice(overrides)
-  return latestTurnInterrupted(chat, legacy, lastAgentError)
+  return latestTurnStop(chat, legacy, lastAgentError)
 }
 
 /** A tool-result node with the given error shape, inside the latest turn's window. */
@@ -58,18 +69,29 @@ function erroredToolResult(seq: number, error: unknown): unknown {
   return { kind: 'tool-result', seq, time: seq * 1000, callId: 'c1', call: { name: 'bash', argsRaw: '{}' }, callTime: null, content: [], isError: true, error, callView: null, resultView: null, subCalls: [] }
 }
 
-describe('latestTurnInterrupted', () => {
-  it('flags a turn ended with reason aborted (manual stop)', () => {
-    expect(interrupted({ reason: 'aborted' })).toBe(true)
+describe('latestTurnStop', () => {
+  it('classifies a turn ended with reason aborted as interrupted (manual stop)', () => {
+    expect(stop({ reason: 'aborted' })).toBe('interrupted')
   })
 
-  it('flags a turn ended with reason interrupted (crash repair)', () => {
-    expect(interrupted({ reason: 'interrupted' })).toBe(true)
+  it('classifies a turn ended with reason interrupted as interrupted (crash repair)', () => {
+    expect(stop({ reason: 'interrupted' })).toBe('interrupted')
+  })
+
+  it('classifies a turn ended with reason error as error (terminal failure)', () => {
+    expect(stop({ reason: 'error' })).toBe('error')
+  })
+
+  it('downgrades an error whose successor turn already began to null (transient 429 recovery)', () => {
+    expect(stop({ reason: 'error', successorStarted: true })).toBeNull()
+  })
+
+  it('downgrades any stopped turn whose successor began (the session moved past it)', () => {
+    expect(stop({ reason: 'aborted', successorStarted: true })).toBeNull()
   })
 
   it('does not flag a completed turn even when an older turn was aborted', () => {
-    const slice = makeSlice()
-    slice.chat = {
+    const chat = {
       timeline: {
         turnOrder: [1, 2],
         turns: new Map([
@@ -78,53 +100,54 @@ describe('latestTurnInterrupted', () => {
         ]),
       },
     } as unknown as ChatSnapshot
-    expect(latestTurnInterrupted(slice.chat, slice.legacy, slice.lastAgentError)).toBe(false)
+    const slice = makeSlice()
+    expect(latestTurnStop(chat, slice.legacy, slice.lastAgentError)).toBeNull()
   })
 
-  it('flags via lastAgentError for live failures with no turn position', () => {
-    expect(interrupted({ lastAgentError: 'boom' })).toBe(true)
+  it('classifies via lastAgentError as error for live failures with no turn position', () => {
+    expect(stop({ lastAgentError: 'boom' })).toBe('error')
   })
 
-  it('fallback: flags a flat ABORTED_BEFORE_DISPATCH tool-result code', () => {
+  it('fallback: classifies a flat ABORTED_BEFORE_DISPATCH tool-result code as interrupted', () => {
     const nodes = [erroredToolResult(9, { name: 'AbortError', code: 'ABORTED_BEFORE_DISPATCH' })] as ConversationNode[]
-    expect(interrupted({ nodes })).toBe(true)
+    expect(stop({ nodes })).toBe('interrupted')
   })
 
-  it('fallback: flags the nested scheduler error shape (info.code)', () => {
+  it('fallback: classifies the nested scheduler error shape (info.code) as interrupted', () => {
     const nodes = [erroredToolResult(9, { message: 'tool call aborted before dispatch', info: { name: 'AbortError', code: 'ABORTED_BEFORE_DISPATCH' } })] as ConversationNode[]
-    expect(interrupted({ nodes })).toBe(true)
+    expect(stop({ nodes })).toBe('interrupted')
   })
 
-  it('fallback: flags the repair codes TOOL_OUTCOME_UNKNOWN / TOOL_NOT_STARTED', () => {
+  it('fallback: classifies the repair codes TOOL_OUTCOME_UNKNOWN / TOOL_NOT_STARTED as interrupted', () => {
     for (const code of ['TOOL_OUTCOME_UNKNOWN', 'TOOL_NOT_STARTED']) {
       const nodes = [erroredToolResult(9, { name: 'X', code })] as ConversationNode[]
-      expect(interrupted({ nodes })).toBe(true)
+      expect(stop({ nodes })).toBe('interrupted')
     }
   })
 
   it('fallback: keeps the legacy interrupted code working', () => {
     const nodes = [erroredToolResult(9, { name: 'X', code: 'interrupted' })] as ConversationNode[]
-    expect(interrupted({ nodes })).toBe(true)
+    expect(stop({ nodes })).toBe('interrupted')
   })
 
-  it('flags an interrupted assistant node (frozen partial)', () => {
+  it('classifies an interrupted assistant node (frozen partial) as interrupted', () => {
     const nodes = [{ kind: 'assistant', seq: 9, time: 9000, turn: 1, step: 1, blocks: [{ kind: 'text', text: '一半' }], interrupted: true }] as unknown as ConversationNode[]
-    expect(interrupted({ nodes })).toBe(true)
+    expect(stop({ nodes })).toBe('interrupted')
   })
 
-  it('flags a turn-error node (terminal failure)', () => {
+  it('classifies a turn-error node (terminal failure) as error', () => {
     const nodes = [{ kind: 'turn-error', seq: 10, time: 10000, turn: 1, step: 0, message: 'boom', code: 'UNKNOWN' }] as unknown as ConversationNode[]
-    expect(interrupted({ nodes })).toBe(true)
+    expect(stop({ nodes })).toBe('error')
   })
 
-  it('returns false for a clean snapshot', () => {
-    expect(interrupted({ reason: 'completed' })).toBe(false)
+  it('returns null for a clean snapshot', () => {
+    expect(stop({ reason: 'completed' })).toBeNull()
   })
 
   it('ignores tool-result errors outside the latest turn window', () => {
     const nodes = [erroredToolResult(3, { name: 'X', code: 'TOOL_OUTCOME_UNKNOWN' })] as ConversationNode[]
     // Latest turn end seq 10; node seq 3 sits in the previous turn's window.
-    expect(interrupted({ nodes, turnEnds: new Map([[0, 5], [1, 10]]) })).toBe(false)
+    expect(stop({ nodes, turnEnds: new Map([[0, 5], [1, 10]]) })).toBeNull()
   })
 })
 

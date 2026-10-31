@@ -143,59 +143,92 @@ const INTERRUPTED_ERROR_CODES = new Set([
 ])
 
 /**
+ * How the session's LATEST completed turn was stopped, for the strip's
+ * attention color: 'interrupted' — a manual stop or a crash repair (the
+ * model never finished its move); 'error' — the turn ended on a provider
+ * or runtime error (API throttling included); null — nothing noteworthy.
+ */
+export type TurnStopKind = 'interrupted' | 'error'
+
+/**
  * Whether the session's LATEST completed turn was stopped mid-flight — a
- * manual stop, an API failure, or another unexpected break.
+ * manual stop, an API failure, or another unexpected break — and which of
+ * the two semantics applies.
  *
  * Primary signal (DSH 0.1.x): the latest completed turn's `turn/end` reason,
  * read off the Chat view's timeline — a stop leaves no per-node trace for
  * every case (no partial content to freeze, no in-flight call to error), but
  * the turn always ends with reason 'aborted' (cancel) or 'interrupted'
- * (repair). `lastAgentError` comes from the Session lifecycle snapshot
- * (live agent failures with no turn position).
+ * (repair) for stops and 'error' for terminal failures. `lastAgentError`
+ * comes from the Session lifecycle snapshot (live agent failures with no
+ * turn position).
  *
- * Fallback (windowed node traces, covers older hosts and error-ended turns):
- * an interrupted assistant node (frozen partial), tool-result nodes whose
- * error code marks a cut-off call, and turn-error nodes (terminal failure).
- * Only the latest completed turn is judged (its turn/end seq is the
- * boundary — derived interruption nodes ride fractional seqs just below
- * it), so an interruption followed by a clean turn does not keep the bar
- * orange. Window-scoped by design — paging or compaction drops old markers.
+ * Transient-error downgrade: a 429-family provider error (rolling-window
+ * throttling that the harness retries and the next turn survives) stops
+ * coloring the strip once a successor turn has begun — the timeline knows
+ * started-but-not-ended turns, so "error, then the session moved on" reads
+ * as null instead of holding the bar orange.
+ *
+ * Fallback (windowed node traces, covers older hosts): an interrupted
+ * assistant node (frozen partial), tool-result nodes whose error code marks
+ * a cut-off call, and turn-error nodes (terminal failure). Only the latest
+ * completed turn is judged (its turn/end seq is the boundary — derived
+ * interruption nodes ride fractional seqs just below it), so an interruption
+ * followed by a clean turn does not keep the bar orange. Window-scoped by
+ * design — paging or compaction drops old markers.
+ *
+ * @param chat - the Chat view snapshot (turn timeline), when available.
+ * @param legacy - the Chat legacy compatibility projection (windowed nodes).
+ * @param lastAgentError - the Session lifecycle's live agent error, or null.
+ * @returns the stop kind for the latest completed turn, or null.
  */
-export function latestTurnInterrupted(
+export function latestTurnStop(
   chat: ChatSnapshot | undefined,
   legacy: ChatLegacy,
   lastAgentError: string | null,
-): boolean {
-  if (lastAgentError !== null) return true
+): TurnStopKind | null {
+  if (lastAgentError !== null) return 'error'
   // Authoritative turn/end reason when the timeline is available.
   const turns = chat?.timeline.turns
   if (turns !== undefined) {
-    const latest = [...turns.entries()].sort((a, b) => a[0] - b[0]).at(-1)?.[1]
+    const sorted = [...turns.entries()].sort((a, b) => a[0] - b[0])
+    const latest = sorted.at(-1)?.[1]
     const reason = latest?.end?.data?.reason?.kind
-    if (reason !== undefined && INTERRUPTED_TURN_REASONS.has(reason)) return true
+    if (reason !== undefined) {
+      if (INTERRUPTED_TURN_REASONS.has(reason)) return 'interrupted'
+      if (reason === 'error') {
+        // Transient 429 throttling: once a successor turn exists (started,
+        // running or ended), the session has moved past the failure — the
+        // strip follows the successor instead of holding the error color.
+        const latestEndSeq = sorted.at(-1)?.[1]?.end?.seq ?? Number.MAX_SAFE_INTEGER
+        const successorStarted = sorted.some(([, turn]) => turn.start !== undefined && turn.start.seq > latestEndSeq)
+        return successorStarted ? null : 'error'
+      }
+      return null
+    }
   }
   // The latest completed in-window turn and the end seq of the turn before
   // it: the previous end seq is the exact lower boundary for the latest
   // turn's own nodes (every later turn's events sit above it).
   const ends = [...legacy.turnEnds.entries()].sort((a, b) => a[0] - b[0])
   const latestEnd = ends.at(-1)
-  if (latestEnd === undefined) return false
+  if (latestEnd === undefined) return null
   const latestEndSeq = latestEnd[1]
   const prevEndSeq = ends.at(-2)?.[1] ?? 0
   for (const node of legacy.nodes) {
     if (node.seq <= prevEndSeq || node.seq > latestEndSeq) continue
-    if (node.kind === 'assistant' && node.interrupted === true) return true
-    if (node.kind === 'turn-error') return true
+    if (node.kind === 'assistant' && node.interrupted === true) return 'interrupted'
+    if (node.kind === 'turn-error') return 'error'
     if (node.kind === 'tool-result') {
       // The scheduler-abort shape nests the code under `info`; the repair
       // shape carries it flat. The runtime may carry fields the declared
       // type omits, so read both defensively.
       const err = node.error as { code?: string; info?: { code?: string } } | undefined
       const code = err?.code ?? err?.info?.code
-      if (code !== undefined && INTERRUPTED_ERROR_CODES.has(code)) return true
+      if (code !== undefined && INTERRUPTED_ERROR_CODES.has(code)) return 'interrupted'
     }
   }
-  return false
+  return null
 }
 
 
