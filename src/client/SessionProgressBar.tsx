@@ -289,9 +289,9 @@ export function SessionProgressBar({
   const jobRunning = useBackgroundJobCount(sessionId)
   const backgroundCount = subRunning + jobRunning
   const background = !running && backgroundCount > 0
-  // 停止态（中断/出错）优先于后台：转圈必须停——即使后台计数未清（陈旧的
-  // 子代理/任务 running 标记），已中断的会话不该继续显示加载动画。
-  const spin = running || (background && !interrupted && !errored)
+  // 转圈=有活在干：主回合运行中，或主会话空闲但后台（子代理/任务）真在跑。
+  // 主回合中断但后台仍在跑 → 显示后台态（青色转圈），不显示中断。
+  const spin = running || background
   // Session-wide token usage behind a hover/click panel: the chip shows
   // the running total, the panel breaks it down uncached/cache-read/write
   // and output with the cache-hit percentage. The durable tokenUsage
@@ -329,14 +329,14 @@ export function SessionProgressBar({
     <div className={css.dock} data-progress-bar>
       <div
         className={css.bar}
-        data-state={pending ? 'pending' : running ? 'running' : interrupted ? 'interrupted' : errored ? 'error' : background ? 'background' : completed ? 'done' : 'idle'}
+        data-state={pending ? 'pending' : running ? 'running' : background ? 'background' : interrupted ? 'interrupted' : errored ? 'error' : completed ? 'done' : 'idle'}
         data-cause={stop?.cause}
       >
         <span className={clsx(css.glyph, spin && css.glyphRunning)}>
           {spin ? <IconLoading size={14} /> : interrupted || errored ? <IconWarning size={14} /> : <IconSparkle size={14} />}
         </span>
         <span className={css.label}>
-          {pending ? pendingLabel(ownPending, subPending, t) : interrupted ? (stop?.cause === 'manual' ? t('bar.interrupted') : t('bar.stop.crash')) : errored ? stopErrorLabel(stop?.cause, t) : background ? t('bar.background', { count: backgroundCount }) : stateLabel(running, toolName, thinking, counts, t)}
+          {pending ? pendingLabel(ownPending, subPending, t) : background ? t('bar.background', { count: backgroundCount }) : interrupted ? (stop?.cause === 'manual' ? t('bar.interrupted') : t('bar.stop.crash')) : errored ? stopErrorLabel(stop?.cause, t) : stateLabel(running, toolName, thinking, counts, t)}
         </span>
         <div className={css.track} role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
           <div
