@@ -151,6 +151,19 @@
   color: var(--ui-progress-interrupted);
 }
 
+/* 原因配色：密钥无效=正红、API 限额=琥珀、上下文超限=紫、其余保持橙红混合。 */
+.bar[data-state='error'][data-cause='apikey'] {
+  --ui-progress-interrupted: var(--dsw-alias-state-error-primary);
+}
+
+.bar[data-state='error'][data-cause='ratelimit'] {
+  --ui-progress-interrupted: var(--dsw-alias-state-warn-primary);
+}
+
+.bar[data-state='error'][data-cause='context'] {
+  --ui-progress-interrupted: #ab7df6;
+}
+
 @keyframes dsh-session-progress-interrupted-glow {
   0%, 100% {
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--ui-progress-interrupted) 0%, transparent);

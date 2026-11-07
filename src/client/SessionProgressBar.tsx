@@ -78,7 +78,7 @@ import type { ReactNode } from 'react'
 import css from './SessionProgressBar.module.css'
 import {
   isReasoning, lastTurnDuration, latestReportEta, latestTurnStop, progressPercent, subagentRunningCount, tokenUsageTotals,
-  runningTool, runningTurnStart, settledToolCount, todoCounts, type ChatLegacy,
+  runningTool, runningTurnStart, settledToolCount, todoCounts, type ChatLegacy, type StopCause,
 } from './session-state.ts'
 import { formatElapsed, TOKEN_RATE_WINDOW_MS, useFirstTokenAt, useNow, useWindowedTokenRate } from './timing.ts'
 import { useBackgroundJobCount } from './jobs-source.ts'
@@ -206,6 +206,14 @@ function stateLabel(
   return t('bar.idle')
 }
 
+/** 出错态按具体原因选标签：密钥无效 / API 限额 / 上下文超限，其余统称出错。 */
+function stopErrorLabel(cause: StopCause | undefined, t: SessionProgressBarProps['t']): ReactNode {
+  if (cause === 'apikey') return t('bar.stop.apikey')
+  if (cause === 'ratelimit') return t('bar.stop.ratelimit')
+  if (cause === 'context') return t('bar.stop.context')
+  return t('bar.error')
+}
+
 /** Compact token count: 271904215 -> '271.9M', 355950 -> '356.0K'. */
 function formatTokenCount(n: number): string {
   if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B'
@@ -269,8 +277,8 @@ export function SessionProgressBar({
   // missed. A transient 429 whose successor turn already began reads null
   // (see latestTurnStop) and the strip follows the successor.
   const stop = !running ? latestTurnStop(chat, legacy, session.lastAgentError) : null
-  const interrupted = stop === 'interrupted'
-  const errored = stop === 'error'
+  const interrupted = stop?.kind === 'interrupted'
+  const errored = stop?.kind === 'error'
   // Background state: this main conversation is idle while descendant
   // subagent sessions keep executing — the strip must not read 会话就绪
   // (the green done rest) while background work is still running.
@@ -281,6 +289,9 @@ export function SessionProgressBar({
   const jobRunning = useBackgroundJobCount(sessionId)
   const backgroundCount = subRunning + jobRunning
   const background = !running && backgroundCount > 0
+  // 停止态（中断/出错）优先于后台：转圈必须停——即使后台计数未清（陈旧的
+  // 子代理/任务 running 标记），已中断的会话不该继续显示加载动画。
+  const spin = running || (background && !interrupted && !errored)
   // Session-wide token usage behind a hover/click panel: the chip shows
   // the running total, the panel breaks it down uncached/cache-read/write
   // and output with the cache-hit percentage. The durable tokenUsage
@@ -319,12 +330,13 @@ export function SessionProgressBar({
       <div
         className={css.bar}
         data-state={pending ? 'pending' : running ? 'running' : interrupted ? 'interrupted' : errored ? 'error' : background ? 'background' : completed ? 'done' : 'idle'}
+        data-cause={stop?.cause}
       >
-        <span className={clsx(css.glyph, (running || background) && css.glyphRunning)}>
-          {running || background ? <IconLoading size={14} /> : interrupted || errored ? <IconWarning size={14} /> : <IconSparkle size={14} />}
+        <span className={clsx(css.glyph, spin && css.glyphRunning)}>
+          {spin ? <IconLoading size={14} /> : interrupted || errored ? <IconWarning size={14} /> : <IconSparkle size={14} />}
         </span>
         <span className={css.label}>
-          {pending ? pendingLabel(ownPending, subPending, t) : interrupted ? t('bar.interrupted') : errored ? t('bar.error') : background ? t('bar.background', { count: backgroundCount }) : stateLabel(running, toolName, thinking, counts, t)}
+          {pending ? pendingLabel(ownPending, subPending, t) : interrupted ? (stop?.cause === 'manual' ? t('bar.interrupted') : t('bar.stop.crash')) : errored ? stopErrorLabel(stop?.cause, t) : background ? t('bar.background', { count: backgroundCount }) : stateLabel(running, toolName, thinking, counts, t)}
         </span>
         <div className={css.track} role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
           <div

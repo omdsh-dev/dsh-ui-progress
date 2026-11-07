@@ -150,6 +150,29 @@ const INTERRUPTED_ERROR_CODES = new Set([
  */
 export type TurnStopKind = 'interrupted' | 'error'
 
+/** 具体停止原因：手动中断 / 密钥无效 / API 限额 / 上下文超限 / 其他。 */
+export type StopCause = 'manual' | 'apikey' | 'ratelimit' | 'context' | 'other'
+
+/** 错误文本 → 原因分类（对 provider 错误消息做模式匹配，顺序敏感：
+ * 限额最常见先查，上下文次之，密钥特征词最独特后查兜底）。 */
+const RATE_LIMIT_RE = /429|rate[ _-]?limit|quota|usage[ _-]?limit|1308|too many requests|exceeded your current quota|insufficient balance|余额不足|欠费/i
+const CONTEXT_RE = /context[_ ]?(?:length|window|limit)|maximum context|context_length_exceeded|prompt is too long|too many tokens|上下文|超出.*上下文|token limit/i
+const APIKEY_RE = /api[ _-]?key|invalid[ _-]?(?:key|credential|token)|unauthorized|401|authentication|鉴权|密钥/i
+
+/** 把一段错误文本归类为四种非手动原因之一。 */
+export function classifyErrorText(text: string): StopCause {
+  if (RATE_LIMIT_RE.test(text)) return 'ratelimit'
+  if (CONTEXT_RE.test(text)) return 'context'
+  if (APIKEY_RE.test(text)) return 'apikey'
+  return 'other'
+}
+
+/** 停止信息：中断/出错语义 + 具体原因。 */
+export interface TurnStop {
+  readonly kind: TurnStopKind
+  readonly cause: StopCause
+}
+
 /**
  * Whether the session's LATEST completed turn was stopped mid-flight — a
  * manual stop, an API failure, or another unexpected break — and which of
@@ -186,8 +209,8 @@ export function latestTurnStop(
   chat: ChatSnapshot | undefined,
   legacy: ChatLegacy,
   lastAgentError: string | null,
-): TurnStopKind | null {
-  if (lastAgentError !== null) return 'error'
+): TurnStop | null {
+  if (lastAgentError !== null) return { kind: 'error', cause: classifyErrorText(lastAgentError) }
   // Authoritative turn/end reason when the timeline is available.
   const turns = chat?.timeline.turns
   if (turns !== undefined) {
@@ -195,14 +218,21 @@ export function latestTurnStop(
     const latest = sorted.at(-1)?.[1]
     const reason = latest?.end?.data?.reason?.kind
     if (reason !== undefined) {
-      if (INTERRUPTED_TURN_REASONS.has(reason)) return 'interrupted'
+      if (INTERRUPTED_TURN_REASONS.has(reason)) {
+        // 'aborted' = 手动停止/取消；'interrupted' = 崩溃修复收尾（无更多文本）。
+        return { kind: 'interrupted', cause: reason === 'aborted' ? 'manual' : 'other' }
+      }
       if (reason === 'error') {
         // Transient 429 throttling: once a successor turn exists (started,
         // running or ended), the session has moved past the failure — the
         // strip follows the successor instead of holding the error color.
         const latestEndSeq = sorted.at(-1)?.[1]?.end?.seq ?? Number.MAX_SAFE_INTEGER
         const successorStarted = sorted.some(([, turn]) => turn.start !== undefined && turn.start.seq > latestEndSeq)
-        return successorStarted ? null : 'error'
+        if (successorStarted) return null
+        // reason 可能带 message 文本（运行时字段，防御性读取）。
+        const reasonData = latest?.end?.data?.reason as { message?: unknown } | undefined
+        const message = typeof reasonData?.message === 'string' ? reasonData.message : ''
+        return { kind: 'error', cause: classifyErrorText(message) }
       }
       return null
     }
@@ -217,15 +247,21 @@ export function latestTurnStop(
   const prevEndSeq = ends.at(-2)?.[1] ?? 0
   for (const node of legacy.nodes) {
     if (node.seq <= prevEndSeq || node.seq > latestEndSeq) continue
-    if (node.kind === 'assistant' && node.interrupted === true) return 'interrupted'
-    if (node.kind === 'turn-error') return 'error'
+    if (node.kind === 'assistant' && node.interrupted === true) return { kind: 'interrupted', cause: 'other' }
+    if (node.kind === 'turn-error') {
+      const errText = node.message !== '' ? node.message : (node.code ?? '')
+      return { kind: 'error', cause: classifyErrorText(errText) }
+    }
     if (node.kind === 'tool-result') {
       // The scheduler-abort shape nests the code under `info`; the repair
       // shape carries it flat. The runtime may carry fields the declared
       // type omits, so read both defensively.
       const err = node.error as { code?: string; info?: { code?: string } } | undefined
       const code = err?.code ?? err?.info?.code
-      if (code !== undefined && INTERRUPTED_ERROR_CODES.has(code)) return 'interrupted'
+      if (code !== undefined && INTERRUPTED_ERROR_CODES.has(code)) {
+        // ABORTED_BEFORE_DISPATCH 是取消（手动）；其余为修复收尾。
+        return { kind: 'interrupted', cause: code === 'ABORTED_BEFORE_DISPATCH' ? 'manual' : 'other' }
+      }
     }
   }
   return null

@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { ChatSnapshot, ConversationNode } from '@deepseek-ai/dsh-client-ui-chat/client'
-import { latestTurnStop, subagentRunningCount, tokenUsageTotals, type ChatLegacy, type TurnStopKind } from '../src/client/session-state.ts'
+import { classifyErrorText, latestTurnStop, subagentRunningCount, tokenUsageTotals, type ChatLegacy, type TurnStop } from '../src/client/session-state.ts'
 
 /** One minimal turn/end event carrying the reason the derivation reads. */
 function turnEnd(turn: number, seq: number, kind: string): unknown {
@@ -59,7 +59,7 @@ function makeSlice(overrides: {
 }
 
 /** Run the derivation over one slice. */
-function stop(overrides: Parameters<typeof makeSlice>[0] = {}): TurnStopKind | null {
+function stop(overrides: Parameters<typeof makeSlice>[0] = {}): TurnStop | null {
   const { chat, legacy, lastAgentError } = makeSlice(overrides)
   return latestTurnStop(chat, legacy, lastAgentError)
 }
@@ -71,15 +71,15 @@ function erroredToolResult(seq: number, error: unknown): unknown {
 
 describe('latestTurnStop', () => {
   it('classifies a turn ended with reason aborted as interrupted (manual stop)', () => {
-    expect(stop({ reason: 'aborted' })).toBe('interrupted')
+    expect(stop({ reason: 'aborted' })).toEqual({ kind: 'interrupted', cause: 'manual' })
   })
 
   it('classifies a turn ended with reason interrupted as interrupted (crash repair)', () => {
-    expect(stop({ reason: 'interrupted' })).toBe('interrupted')
+    expect(stop({ reason: 'interrupted' })).toEqual({ kind: 'interrupted', cause: 'other' })
   })
 
   it('classifies a turn ended with reason error as error (terminal failure)', () => {
-    expect(stop({ reason: 'error' })).toBe('error')
+    expect(stop({ reason: 'error' })).toEqual({ kind: 'error', cause: 'other' })
   })
 
   it('downgrades an error whose successor turn already began to null (transient 429 recovery)', () => {
@@ -105,39 +105,39 @@ describe('latestTurnStop', () => {
   })
 
   it('classifies via lastAgentError as error for live failures with no turn position', () => {
-    expect(stop({ lastAgentError: 'boom' })).toBe('error')
+    expect(stop({ lastAgentError: 'boom' })).toEqual({ kind: 'error', cause: 'other' })
   })
 
   it('fallback: classifies a flat ABORTED_BEFORE_DISPATCH tool-result code as interrupted', () => {
     const nodes = [erroredToolResult(9, { name: 'AbortError', code: 'ABORTED_BEFORE_DISPATCH' })] as ConversationNode[]
-    expect(stop({ nodes })).toBe('interrupted')
+    expect(stop({ nodes })).toEqual(expect.objectContaining({ kind: 'interrupted' }))
   })
 
   it('fallback: classifies the nested scheduler error shape (info.code) as interrupted', () => {
     const nodes = [erroredToolResult(9, { message: 'tool call aborted before dispatch', info: { name: 'AbortError', code: 'ABORTED_BEFORE_DISPATCH' } })] as ConversationNode[]
-    expect(stop({ nodes })).toBe('interrupted')
+    expect(stop({ nodes })).toEqual(expect.objectContaining({ kind: 'interrupted' }))
   })
 
   it('fallback: classifies the repair codes TOOL_OUTCOME_UNKNOWN / TOOL_NOT_STARTED as interrupted', () => {
     for (const code of ['TOOL_OUTCOME_UNKNOWN', 'TOOL_NOT_STARTED']) {
       const nodes = [erroredToolResult(9, { name: 'X', code })] as ConversationNode[]
-      expect(stop({ nodes })).toBe('interrupted')
+      expect(stop({ nodes })).toEqual(expect.objectContaining({ kind: 'interrupted' }))
     }
   })
 
   it('fallback: keeps the legacy interrupted code working', () => {
     const nodes = [erroredToolResult(9, { name: 'X', code: 'interrupted' })] as ConversationNode[]
-    expect(stop({ nodes })).toBe('interrupted')
+    expect(stop({ nodes })).toEqual(expect.objectContaining({ kind: 'interrupted' }))
   })
 
   it('classifies an interrupted assistant node (frozen partial) as interrupted', () => {
     const nodes = [{ kind: 'assistant', seq: 9, time: 9000, turn: 1, step: 1, blocks: [{ kind: 'text', text: '一半' }], interrupted: true }] as unknown as ConversationNode[]
-    expect(stop({ nodes })).toBe('interrupted')
+    expect(stop({ nodes })).toEqual(expect.objectContaining({ kind: 'interrupted' }))
   })
 
   it('classifies a turn-error node (terminal failure) as error', () => {
     const nodes = [{ kind: 'turn-error', seq: 10, time: 10000, turn: 1, step: 0, message: 'boom', code: 'UNKNOWN' }] as unknown as ConversationNode[]
-    expect(stop({ nodes })).toBe('error')
+    expect(stop({ nodes })).toEqual(expect.objectContaining({ kind: 'error' }))
   })
 
   it('returns null for a clean snapshot', () => {
@@ -193,5 +193,28 @@ describe("subagentRunningCount", () => {
   })
   it("returns 0 for an unknown root", () => {
     expect(subagentRunningCount(byId, 'nope')).toBe(0)
+  })
+})
+
+describe('classifyErrorText', () => {
+  it('classifies rate-limit messages', () => {
+    expect(classifyErrorText('429 Too Many Requests')).toBe('ratelimit')
+    expect(classifyErrorText('Usage limit reached for 5 hour window (code 1308)')).toBe('ratelimit')
+    expect(classifyErrorText('rate_limit_exceeded')).toBe('ratelimit')
+  })
+  it('classifies context overflow messages', () => {
+    expect(classifyErrorText('This model maximum context length is 65536 tokens')).toBe('context')
+    expect(classifyErrorText('prompt is too long')).toBe('context')
+  })
+  it('classifies api-key messages', () => {
+    expect(classifyErrorText('401 Unauthorized: invalid API key')).toBe('apikey')
+    expect(classifyErrorText('authentication failed')).toBe('apikey')
+  })
+  it('classifies unknown as other', () => {
+    expect(classifyErrorText('boom')).toBe('other')
+  })
+  it('latestTurnStop carries the cause through lastAgentError', () => {
+    expect(stop({ lastAgentError: 'Error 429: rate limit hit' })).toEqual({ kind: 'error', cause: 'ratelimit' })
+    expect(stop({ lastAgentError: 'Invalid API key provided' })).toEqual({ kind: 'error', cause: 'apikey' })
   })
 })
