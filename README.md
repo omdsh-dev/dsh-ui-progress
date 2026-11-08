@@ -62,19 +62,19 @@ dsh plugin --profile web add link:/path/to/dsh-ui-progress
 
 | 插件版本 | DSH 快照 | 说明 |
 | --- | --- | --- |
-| `v0.11.15` | 与上一版相同 | 声明支持 dsh-v0.2.2-rc.1（六插件舰队升级实机验证：npm 树迁移后 headless 冒烟 + dump-config 全插件加载，零适配改动） |
-| `v0.11.14` | 与上一版相同 | 声明支持 dsh-v0.2.2-alpha.3（舰队契约巡检：六插件 slot/服务/remote API 全活，零适配改动） |
-| `v0.11.13` | 与上一版相同 | 声明支持 dsh-v0.2.2-alpha.2（统一右键/键盘菜单等宿主面变更不触及本插件注入面，零适配改动） |
-| `v0.11.12` | 与上一版相同 | 声明支持 dsh-v0.2.2-alpha.2（同快照补登：npm 发版窗口对齐） |
-| `v0.11.11` | 与上一版相同 | 声明支持 dsh-v0.2.1-rc.4（纯版本 bump，零适配改动） |
-| `v0.11.10` | 与上一版相同 | 声明支持 dsh-v0.2.1-rc.3（rc.2+rc.3 合并声明：ACP stdout 诊断修复不影响本插件面，零适配改动） |
-| `v0.11.16`（默认） | 与上一版相同 | **中断/出错原因五分类显示** + **状态优先级修正**：停止态按错误信息关键字归类为五类文案与配色——密钥无效（正红，匹配 401/Unauthorized/invalid key/鉴权）、API 限额（琥珀，匹配 429/rate limit/quota/1308/余额不足）、上下文超限（紫色，匹配 context length/prompt too long）、已中断（手动，橙红）、已中断 · 异常断开（崩溃修复），未匹配兜底「出错」；进度条挂 `data-cause` 属性可扩展样式。优先级改为 pending > running > background > interrupted/error > done > idle——主回合停止但后台子代理/任务仍在跑时显示青色后台态（转圈），无后台时停止态显示静止警告图标不转圈 |
-| `v0.11.9` | 与上一版相同 | 声明支持 dsh-v0.2.1-rc.1（0.2.1 系首个候选版，整合 alpha.1–5 全部插件面变更；升级实机验证：web profile `--dump-config` 全插件行加载零错误；运行时只读探测 file-trace mermaid/katex 路由 200、better-sidebar fence 活；宿主保留 webStartup 服务、无 alpha.5 之外的插件面破坏性变更；零适配改动）；双 bundle `node --check` 通过 |
-| `v0.11.8` | 与上一版相同 | **修复工具执行期 token 速率冻结**：短思考→工具调用的切换中，实时 token 速率会带着旧值冻结显示整个工具执行期（根因：滑动窗口只在有新 token 时更新读数、空窗口永远保留旧值，而 tool-call 步的 partial 在参数流完后 tokens 恒定）；现在连续两个空窗口（约 2 秒）自动清空读数、token 恢复流动即重新显示，单窗口间隙仍保留旧值不闪零。新增 5 个 hook 测试，全量 62 测试通过 |
-| `v0.11.7` | 与上一版相同 | 声明支持 dsh-v0.2.1-alpha.5（升级实机验证：web profile `--dump-config` 全插件行加载零错误；运行时只读探测 file-trace mermaid/katex 路由 200、better-sidebar fence 活；宿主保留 webStartup 服务、无插件面破坏性变更——新增的 `conversation.input.model.label` Slot 为并列新增键，与本插件既有注入面（`conversation.input.for` / `conversation.input.dock` 等）无冲突；零适配改动）；双 bundle `node --check` 通过 |
-| `v0.11.6` | 与上一版相同 | 声明支持 dsh-v0.2.1-alpha.4（升级实机验证：web profile `--dump-config` 全插件行加载零错误；宿主保留 webStartup 服务、无插件面破坏性变更——新引入的 engines.dsh 兼容判定仅对声明者生效，本插件未声明故沿用原有规则；六插件零适配改动）；双 bundle `node --check` 通过 |
-| `v0.11.5` | 与上一版相同 | 声明支持 dsh-v0.2.1-alpha.3（升级实机验证：web profile `--dump-config` 全插件行加载零错误；运行时只读探测 file-trace mermaid/katex 路由 200、better-sidebar fence 活；宿主保留 webStartup 服务，六插件零适配改动）；双 bundle `node --check` 通过 |
-| `v0.11.4` | 与上一版相同 | **自带 bundle 声明**：补齐 `cordis.patch.yml` 并声明 `dsh.bundle.patch`——`dsh plugin --profile web add` 装完自动注册并挂载 profile 层，不再需要手写 insert 行（社区反馈「GUI 安装后不生效」的根因）；双 bundle `node --check` 通过 |
+| `v0.11.15` | `dsh-v0.1.2-alpha.1` ~ `dsh-v0.2.2-rc.1`（其间全线） | 声明支持 dsh-v0.2.2-rc.1（六插件舰队升级实机验证：npm 树迁移后 headless 冒烟 + dump-config 全插件加载，零适配改动） |
+| `v0.11.14` | `dsh-v0.1.2-alpha.1` ~ `dsh-v0.2.2-alpha.3`（其间全线） | 声明支持 dsh-v0.2.2-alpha.3（舰队契约巡检：六插件 slot/服务/remote API 全活，零适配改动） |
+| `v0.11.13` | `dsh-v0.1.2-alpha.1` ~ `dsh-v0.2.2-alpha.2`（其间全线） | 声明支持 dsh-v0.2.2-alpha.2（统一右键/键盘菜单等宿主面变更不触及本插件注入面，零适配改动） |
+| `v0.11.12` | `dsh-v0.1.2-alpha.1` ~ `dsh-v0.2.2-alpha.2`（其间全线） | 声明支持 dsh-v0.2.2-alpha.2（同快照补登：npm 发版窗口对齐） |
+| `v0.11.11` | `dsh-v0.1.2-alpha.1` ~ `dsh-v0.2.1-rc.4`（其间全线） | 声明支持 dsh-v0.2.1-rc.4（纯版本 bump，零适配改动） |
+| `v0.11.10` | `dsh-v0.1.2-alpha.1` ~ `dsh-v0.2.1-rc.3`（其间全线） | 声明支持 dsh-v0.2.1-rc.3（rc.2+rc.3 合并声明：ACP stdout 诊断修复不影响本插件面，零适配改动） |
+| `v0.11.16`（默认） | `dsh-v0.1.2-alpha.1` ~ `dsh-v0.2.2-rc.1`（其间全线） | **中断/出错原因五分类显示** + **状态优先级修正**：停止态按错误信息关键字归类为五类文案与配色——密钥无效（正红，匹配 401/Unauthorized/invalid key/鉴权）、API 限额（琥珀，匹配 429/rate limit/quota/1308/余额不足）、上下文超限（紫色，匹配 context length/prompt too long）、已中断（手动，橙红）、已中断 · 异常断开（崩溃修复），未匹配兜底「出错」；进度条挂 `data-cause` 属性可扩展样式。优先级改为 pending > running > background > interrupted/error > done > idle——主回合停止但后台子代理/任务仍在跑时显示青色后台态（转圈），无后台时停止态显示静止警告图标不转圈 |
+| `v0.11.9` | `dsh-v0.1.2-alpha.1` ~ `dsh-v0.2.1-rc.1`（其间全线） | 声明支持 dsh-v0.2.1-rc.1（0.2.1 系首个候选版，整合 alpha.1–5 全部插件面变更；升级实机验证：web profile `--dump-config` 全插件行加载零错误；运行时只读探测 file-trace mermaid/katex 路由 200、better-sidebar fence 活；宿主保留 webStartup 服务、无 alpha.5 之外的插件面破坏性变更；零适配改动）；双 bundle `node --check` 通过 |
+| `v0.11.8` | `dsh-v0.1.2-alpha.1` ~ `dsh-v0.2.1-alpha.5`（其间全线） | **修复工具执行期 token 速率冻结**：短思考→工具调用的切换中，实时 token 速率会带着旧值冻结显示整个工具执行期（根因：滑动窗口只在有新 token 时更新读数、空窗口永远保留旧值，而 tool-call 步的 partial 在参数流完后 tokens 恒定）；现在连续两个空窗口（约 2 秒）自动清空读数、token 恢复流动即重新显示，单窗口间隙仍保留旧值不闪零。新增 5 个 hook 测试，全量 62 测试通过 |
+| `v0.11.7` | `dsh-v0.1.2-alpha.1` ~ `dsh-v0.2.1-alpha.5`（其间全线） | 声明支持 dsh-v0.2.1-alpha.5（升级实机验证：web profile `--dump-config` 全插件行加载零错误；运行时只读探测 file-trace mermaid/katex 路由 200、better-sidebar fence 活；宿主保留 webStartup 服务、无插件面破坏性变更——新增的 `conversation.input.model.label` Slot 为并列新增键，与本插件既有注入面（`conversation.input.for` / `conversation.input.dock` 等）无冲突；零适配改动）；双 bundle `node --check` 通过 |
+| `v0.11.6` | `dsh-v0.1.2-alpha.1` ~ `dsh-v0.2.1-alpha.4`（其间全线） | 声明支持 dsh-v0.2.1-alpha.4（升级实机验证：web profile `--dump-config` 全插件行加载零错误；宿主保留 webStartup 服务、无插件面破坏性变更——新引入的 engines.dsh 兼容判定仅对声明者生效，本插件未声明故沿用原有规则；六插件零适配改动）；双 bundle `node --check` 通过 |
+| `v0.11.5` | `dsh-v0.1.2-alpha.1` ~ `dsh-v0.2.1-alpha.3`（其间全线） | 声明支持 dsh-v0.2.1-alpha.3（升级实机验证：web profile `--dump-config` 全插件行加载零错误；运行时只读探测 file-trace mermaid/katex 路由 200、better-sidebar fence 活；宿主保留 webStartup 服务，六插件零适配改动）；双 bundle `node --check` 通过 |
+| `v0.11.4` | `dsh-v0.1.2-alpha.1` ~ `dsh-v0.2.1-alpha.2`（其间全线） | **自带 bundle 声明**：补齐 `cordis.patch.yml` 并声明 `dsh.bundle.patch`——`dsh plugin --profile web add` 装完自动注册并挂载 profile 层，不再需要手写 insert 行（社区反馈「GUI 安装后不生效」的根因）；双 bundle `node --check` 通过 |
 | `v0.11.3` | `dsh-v0.1.2-alpha.1 ~ alpha.5`、`rc.1`、`0.1.3-alpha.1 ~ 0.1.7-alpha.2`、`0.1.7-rc.1`、`0.1.7-rc.2`、`0.2.0-rc.1`、`0.2.0-rc.2`、`0.2.1-alpha.1`、`0.2.1-alpha.2` | 声明支持 dsh-v0.2.1-alpha.2（升级实机验证：web profile `--dump-config` 全插件行加载、peer 校验零错误，宿主启动监听正常，零适配改动）；双 bundle `node --check` 通过 |
 | `v0.11.2` | `dsh-v0.1.2-alpha.1 ~ alpha.5`、`rc.1`、`0.1.3-alpha.1 ~ 0.1.7-alpha.2`、`0.1.7-rc.1`、`0.1.7-rc.2`、`0.2.0-rc.1`、`0.2.0-rc.2`、`0.2.1-alpha.1` | 声明支持 dsh-v0.2.1-alpha.1（升级实机验证：web 宿主七插件挂载激活正常，零适配改动）；typecheck/57 单测/构建全绿 |
 | `v0.11.1` | `dsh-v0.1.2-alpha.1 ~ alpha.5`、`rc.1`、`0.1.3-alpha.1 ~ 0.1.7-alpha.2`、`0.1.7-rc.1`、`0.1.7-rc.2`、`0.2.0-rc.1`、`0.2.0-rc.2` | **窄宽度两行自适应**：尾部计数收拢为不可拆分的 `.meta` 组，进度条 `flex-wrap` 在百分比处折行——单行布局与原先完全一致，折行后第二行 `margin-inline: auto` 居中；条高 36px→min-height 自适应不裁切；typecheck/57 单测/构建全绿，实机窄窗口验证（用户确认） |
