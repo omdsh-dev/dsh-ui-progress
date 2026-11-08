@@ -15,7 +15,7 @@ DSH Web UI 会话进度插件：为 DeepSeek Harness 的 Web GUI 的输入框停
 
 ```sh
 # 方式一：git 依赖固定 tag（公开镜像，推荐；也可用 github:lhh010/dsh-ui-progress）
-dsh plugin --profile web add '@dsh-external/dsh-ui-progress@github:lhh010/dsh-ui-progress#v0.11.9'
+dsh plugin --profile web add '@dsh-external/dsh-ui-progress@github:lhh010/dsh-ui-progress#v0.11.16'
 
 # 方式二：本地 link（开发）
 git clone https://github.com/lhh010/dsh-ui-progress.git
@@ -38,7 +38,7 @@ dsh plugin --profile web add link:/path/to/dsh-ui-progress
 把下面这段提示词发给任意一个 DSH 会话，模型会替你完成安装：
 
 > 帮我安装 dsh-ui-progress 插件（DSH 会话进度条：输入框常驻会话进度条/todos 真实进度/中断橘红态），步骤：
-> 1. 执行 `dsh plugin --profile web add '@dsh-external/dsh-ui-progress@github:lhh010/dsh-ui-progress#v0.11.9'`（首次可能被 pnpm 11 拦截 node-pty 构建脚本而失败）
+> 1. 执行 `dsh plugin --profile web add '@dsh-external/dsh-ui-progress@github:lhh010/dsh-ui-progress#v0.11.16'`（首次可能被 pnpm 11 拦截 node-pty 构建脚本而失败）
 > 2. 在 `~/.dsh/profiles/web` 下执行 `pnpm approve-builds --all`（放行构建脚本）
 > 3. 再执行一次第 1 步的安装命令
 > 4. 完成后提醒我硬刷新浏览器（Ctrl/Cmd+Shift+R）
@@ -62,7 +62,8 @@ dsh plugin --profile web add link:/path/to/dsh-ui-progress
 
 | 插件版本 | DSH 快照 | 说明 |
 | --- | --- | --- |
-| `v0.11.9`（默认） | 与上一版相同 | 声明支持 dsh-v0.2.1-rc.1（0.2.1 系首个候选版，整合 alpha.1–5 全部插件面变更；升级实机验证：web profile `--dump-config` 全插件行加载零错误；运行时只读探测 file-trace mermaid/katex 路由 200、better-sidebar fence 活；宿主保留 webStartup 服务、无 alpha.5 之外的插件面破坏性变更；零适配改动）；双 bundle `node --check` 通过 |
+| `v0.11.16`（默认） | 与上一版相同 | **中断/出错原因五分类显示** + **状态优先级修正**：停止态按错误信息关键字归类为五类文案与配色——密钥无效（正红，匹配 401/Unauthorized/invalid key/鉴权）、API 限额（琥珀，匹配 429/rate limit/quota/1308/余额不足）、上下文超限（紫色，匹配 context length/prompt too long）、已中断（手动，橙红）、已中断 · 异常断开（崩溃修复），未匹配兜底「出错」；进度条挂 `data-cause` 属性可扩展样式。优先级改为 pending > running > background > interrupted/error > done > idle——主回合停止但后台子代理/任务仍在跑时显示青色后台态（转圈），无后台时停止态显示静止警告图标不转圈 |
+| `v0.11.9` | 与上一版相同 | 声明支持 dsh-v0.2.1-rc.1（0.2.1 系首个候选版，整合 alpha.1–5 全部插件面变更；升级实机验证：web profile `--dump-config` 全插件行加载零错误；运行时只读探测 file-trace mermaid/katex 路由 200、better-sidebar fence 活；宿主保留 webStartup 服务、无 alpha.5 之外的插件面破坏性变更；零适配改动）；双 bundle `node --check` 通过 |
 | `v0.11.8` | 与上一版相同 | **修复工具执行期 token 速率冻结**：短思考→工具调用的切换中，实时 token 速率会带着旧值冻结显示整个工具执行期（根因：滑动窗口只在有新 token 时更新读数、空窗口永远保留旧值，而 tool-call 步的 partial 在参数流完后 tokens 恒定）；现在连续两个空窗口（约 2 秒）自动清空读数、token 恢复流动即重新显示，单窗口间隙仍保留旧值不闪零。新增 5 个 hook 测试，全量 62 测试通过 |
 | `v0.11.7` | 与上一版相同 | 声明支持 dsh-v0.2.1-alpha.5（升级实机验证：web profile `--dump-config` 全插件行加载零错误；运行时只读探测 file-trace mermaid/katex 路由 200、better-sidebar fence 活；宿主保留 webStartup 服务、无插件面破坏性变更——新增的 `conversation.input.model.label` Slot 为并列新增键，与本插件既有注入面（`conversation.input.for` / `conversation.input.dock` 等）无冲突；零适配改动）；双 bundle `node --check` 通过 |
 | `v0.11.6` | 与上一版相同 | 声明支持 dsh-v0.2.1-alpha.4（升级实机验证：web profile `--dump-config` 全插件行加载零错误；宿主保留 webStartup 服务、无插件面破坏性变更——新引入的 engines.dsh 兼容判定仅对声明者生效，本插件未声明故沿用原有规则；六插件零适配改动）；双 bundle `node --check` 通过 |
@@ -113,7 +114,7 @@ dsh plugin --profile web add link:/path/to/dsh-ui-progress
 > **alpha 发版兼容**：兼容 `dsh-v0.1.2-alpha.1`（GitHub tag `dsh-v0.1.2-alpha.1`，源码构建安装，不发布 npm；v0.9.4 迁移并验证：0.1.2-alpha.1 移除了 `@deepseek-ai/dsh-client-runtime` 客户端包，`ClientContext` 改从 `@deepseek-ai/cordis` 导入、`ConversationSnapshot` 重构为 views 架构（旧 `nodes`/`turnTimings`/`turnEnds`/`partial`/`runningCalls` 全部移到 `ChatSnapshot.legacy` 兼容投影，turn 时间线在 `ChatSnapshot.timeline`）。本插件已在 0.1.2-alpha.1 源码基线上重写状态推导（session-state.ts 改为读取 Chat legacy 切片 + 新 SessionSnapshot 的 `lastAgentError`），typecheck、39 个单测与构建全绿，注册改用 `ctx.slots.inject('conversation.input.dock', …)` 新范式）。
 本插件 v0.9.7 起内置**兼容性自诊断**：apply 时探测所需客户端 API,不满足时不再崩溃,而是在页面右下角渲染修复指引横幅(点击可关闭),提示升级 DSH 或更新插件。
 
-> git 依赖方式固定 tag（公开镜像，推荐）：`pnpm add '@dsh-external/dsh-ui-progress@github:lhh010/dsh-ui-progress#v0.11.9'`（或 `github:lhh010/dsh-ui-progress`；历史版本：0809 用户用 `#v0.9.0`，0808 用户用 `#v0.8.0`，0807 用户用 `#v0.6.0`，0805 用户用 `#v0.1.0`）。
+> git 依赖方式固定 tag（公开镜像，推荐）：`pnpm add '@dsh-external/dsh-ui-progress@github:lhh010/dsh-ui-progress#v0.11.16'`（或 `github:lhh010/dsh-ui-progress`；历史版本：0809 用户用 `#v0.9.0`，0808 用户用 `#v0.8.0`，0807 用户用 `#v0.6.0`，0805 用户用 `#v0.1.0`）。
 
 ## 0809 兼容要点（snapshot0809，实机验证）
 
@@ -144,8 +145,10 @@ dsh plugin --profile web add link:/path/to/dsh-ui-progress
 
 - **常驻会话进度条**（`conversation.input.dock`，输入框停靠区）：读取框架 `useSession` 快照渲染真实执行状态——运行中/空闲、当前在飞的工具名、当前窗口已结算的工具结果数、当前轮次。运行中左侧加载圈**旋转**，进度条 shimmer 扫光 + 品牌色光环脉冲，填充宽度缓动。**填充宽度**：有 `todos` 投影时按真实完成比例（(已完成+进行中)/总数，进行中任务计入进度）；无 todos 时固定默认 **100%**——会话整体进度没有专门投影，不展示伪百分比（v0.8.0 起移除旧的"每个已结算工具结果进一格、窗口上限 10"分段填充）。运行中额外显示**实时已耗时**（自当前回合开始，0.1s 步进跳动，满一分钟折叠为 `XmYs` 后按秒递增）与 **ETA 预计剩余时间**（仅当模型在最近的 `report_progress` 上报里给出 `eta` 估计——不做线性外推，模型没报就不显示）；空闲时显示上一回合耗时。**会话完成（跑过至少一轮后空闲）进度条切换为浅绿色**，从未运行过的会话保持中性蓝灰。
 - **中断橘红态**（v0.8.0 新增）：本会话**最近一个已结束回合被中断/停止**——手动打断、API 故障或其他意外原因——进度条切换为**橘红色**（浅橘背景 + 橘红填充/图标/百分比 + 慢速脉冲），标签显示"已中断"，优先于运行中/完成态的常规配色。只按**最近一个**回合判定：中断后继续发送并正常完成的新回合会让进度条恢复正常配色（中断遗留标记仍保留在窗口内但不再触发）。注意态（琥珀，见下）仍优先于中断态。
+- **中断/出错原因五分类**（v0.11.16 新增）：停止原因按错误信息关键字归类为五类，各有专属文案与配色——**密钥无效**（正红，匹配 `401`/`Unauthorized`/`invalid key`/鉴权）、**API 限额**（琥珀，匹配 `429`/`rate limit`/`quota`/`1308`/余额不足）、**上下文超限**（紫色，匹配 `context length`/`prompt too long`）、**已中断**（手动停止，橙红）、**已中断 · 异常断开**（宿主崩溃后修复）；无法归类的兜底显示「出错」。进度条根元素挂 `data-cause` 属性，可据此扩展自定义样式。
+- **状态优先级修正**（v0.11.16 新增）：pending > running > background > interrupted/error > done > idle——主回合已停止但后台子代理/任务仍在跑时，显示青色后台态（转圈）；无后台运行时，停止态显示静止的警告图标，不再转圈。
 - **实时 token 生成速率**（v0.9.0 新增）：运行中**模型正在生成**时（有流式 partial 内容、且无待处理的人机交互），进度条在已耗时旁显示实时速率（如 `12.3 tok/s`，斜体品牌色，固定最小宽度保持进度条右侧稳定）。流式 chunk 不携带 token 计数（核心端只有回合结束后的 provider usage），因此该值是**自校准估算值**：初始按 CJK 感知字符密度折算当前 partial 的 token 数（中日韩宽字符 1 字符 ≈ 1 token，其余按核心 token-meter 同款 4 字符 ≈ 1 token）；一旦窗口内任何已结算 step 上报了真实 output tokens，就用其「真实 tokens ÷ 加权字符数」密度缩放当前流式估算——数字会贴近所用模型 tokenizer 的真实密度，而非固定字符启发式。速率按**滑动窗口平均**（默认 1s 窗口）计算：每 ~1s 刷新一次、只统计最近窗口内新增的 token，消除逐 chunk 闪动；空窗口保持上次读数不归零。速率除以窗口时长（排除 TTFT）——与核心端回合结束后显示的结算 tokens/s（outputTokens/decodeMs）口径一致，运行中数值可直接与结算值对比。每个新 step 重新起算；工具执行/等待人机交互/回合结束时不显示（结算后的精确速率由核心 StatsLine 呈现，避免重复展示同一事实）。
-- **待办提醒（attention）**：本会话或其后代 subagent 会话存在**等待人处理的交互**（沙箱命令审批 / 选项选择 / 计划审阅）时，进度条切换为**琥珀色警告态**（浅琥珀背景 + 琥珀填充/图标 + 慢速脉冲），文字提示来源与类型——`等待审批` / `需要选择`（本会话）、`子代理等待审批` / `子代理需要选择`（subagent）、`等待审批 · 子代理 2 项待处理`（并存时）。subagent 会话被官方侧边栏隐藏，其 pending 状态从全局会话列表（`origin: 'subagent'` 行的 `pendingInteraction`）读取——这是主 agent 感知子代理等待的主要出口。优先级：pending(琥珀) > running(蓝) > interrupted(橘红) > done(绿) > idle(中性)。
+- **待办提醒（attention）**：本会话或其后代 subagent 会话存在**等待人处理的交互**（沙箱命令审批 / 选项选择 / 计划审阅）时，进度条切换为**琥珀色警告态**（浅琥珀背景 + 琥珀填充/图标 + 慢速脉冲），文字提示来源与类型——`等待审批` / `需要选择`（本会话）、`子代理等待审批` / `子代理需要选择`（subagent）、`等待审批 · 子代理 2 项待处理`（并存时）。subagent 会话被官方侧边栏隐藏，其 pending 状态从全局会话列表（`origin: 'subagent'` 行的 `pendingInteraction`）读取——这是主 agent 感知子代理等待的主要出口。优先级（v0.11.16 修正）：pending(琥珀) > running(蓝) > background(青，后台子代理/任务) > interrupted/error(停止态) > done(绿) > idle(中性)。
 
 ## Model Experience
 
