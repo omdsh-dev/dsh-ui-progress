@@ -62,6 +62,12 @@ dsh plugin --profile web add link:/path/to/dsh-ui-progress
 
 | 插件版本 | DSH 快照 | 说明 |
 | --- | --- | --- |
+| `v0.11.15` | 与上一版相同 | 声明支持 dsh-v0.2.2-rc.1（六插件舰队升级实机验证：npm 树迁移后 headless 冒烟 + dump-config 全插件加载，零适配改动） |
+| `v0.11.14` | 与上一版相同 | 声明支持 dsh-v0.2.2-alpha.3（舰队契约巡检：六插件 slot/服务/remote API 全活，零适配改动） |
+| `v0.11.13` | 与上一版相同 | 声明支持 dsh-v0.2.2-alpha.2（统一右键/键盘菜单等宿主面变更不触及本插件注入面，零适配改动） |
+| `v0.11.12` | 与上一版相同 | 声明支持 dsh-v0.2.2-alpha.2（同快照补登：npm 发版窗口对齐） |
+| `v0.11.11` | 与上一版相同 | 声明支持 dsh-v0.2.1-rc.4（纯版本 bump，零适配改动） |
+| `v0.11.10` | 与上一版相同 | 声明支持 dsh-v0.2.1-rc.3（rc.2+rc.3 合并声明：ACP stdout 诊断修复不影响本插件面，零适配改动） |
 | `v0.11.16`（默认） | 与上一版相同 | **中断/出错原因五分类显示** + **状态优先级修正**：停止态按错误信息关键字归类为五类文案与配色——密钥无效（正红，匹配 401/Unauthorized/invalid key/鉴权）、API 限额（琥珀，匹配 429/rate limit/quota/1308/余额不足）、上下文超限（紫色，匹配 context length/prompt too long）、已中断（手动，橙红）、已中断 · 异常断开（崩溃修复），未匹配兜底「出错」；进度条挂 `data-cause` 属性可扩展样式。优先级改为 pending > running > background > interrupted/error > done > idle——主回合停止但后台子代理/任务仍在跑时显示青色后台态（转圈），无后台时停止态显示静止警告图标不转圈 |
 | `v0.11.9` | 与上一版相同 | 声明支持 dsh-v0.2.1-rc.1（0.2.1 系首个候选版，整合 alpha.1–5 全部插件面变更；升级实机验证：web profile `--dump-config` 全插件行加载零错误；运行时只读探测 file-trace mermaid/katex 路由 200、better-sidebar fence 活；宿主保留 webStartup 服务、无 alpha.5 之外的插件面破坏性变更；零适配改动）；双 bundle `node --check` 通过 |
 | `v0.11.8` | 与上一版相同 | **修复工具执行期 token 速率冻结**：短思考→工具调用的切换中，实时 token 速率会带着旧值冻结显示整个工具执行期（根因：滑动窗口只在有新 token 时更新读数、空窗口永远保留旧值，而 tool-call 步的 partial 在参数流完后 tokens 恒定）；现在连续两个空窗口（约 2 秒）自动清空读数、token 恢复流动即重新显示，单窗口间隙仍保留旧值不闪零。新增 5 个 hook 测试，全量 62 测试通过 |
