@@ -90,14 +90,14 @@ describe('latestTokenDensity', () => {
 
   it('derives tokens per weighted char from the latest usable step', () => {
     const step = assistantNode([{ kind: 'text', text: '你好世界' }], 8)
-    expect(latestTokenDensity([step])).toBe(2)
+    expect(latestTokenDensity([step])).toEqual({ blended: 2, reasoning: 2, text: 2 })
   })
 
   it('scans backwards past unusable steps to the newest usable sample', () => {
     const older = assistantNode([{ kind: 'text', text: 'abcd' }], 4) // density 4
     const noUsage = assistantNode([{ kind: 'text', text: 'hello world' }], undefined)
     const newer = assistantNode([{ kind: 'text', text: '你好世界' }], 8) // density 2
-    expect(latestTokenDensity([older, noUsage, newer])).toBe(2)
+    expect(latestTokenDensity([older, noUsage, newer])).toEqual({ blended: 2, reasoning: 2, text: 2 })
   })
 
   it('ignores non-assistant nodes', () => {
@@ -105,7 +105,7 @@ describe('latestTokenDensity', () => {
       kind: 'tool-result', seq: 2, time: 0, callId: 'c', call: { name: 'bash', argsRaw: '' },
     } as ConversationNode
     const step = assistantNode([{ kind: 'text', text: 'abcd' }], 4)
-    expect(latestTokenDensity([tool, step])).toBe(4)
+    expect(latestTokenDensity([tool, step])).toEqual({ blended: 4, reasoning: 4, text: 4 })
   })
 })
 
@@ -155,5 +155,23 @@ describe('formatTokenRate', () => {
 
   it('clamps negatives to zero', () => {
     expect(formatTokenRate(-3)).toBe('0')
+  })
+})
+describe('per-kind density calibration', () => {
+  it('derives separate reasoning and text densities from dominant steps', async () => {
+    const mod = await import('../src/client/token-rate.ts')
+    // 思考主导步：10 real tokens / 5 weighted reasoning chars → reasoning 2。
+    const reasoningStep = assistantNode([{ kind: 'reasoning', text: 'abcde' }], 10)
+    // 正文主导步：8 tokens / 4 CJK chars → text 2（同值不同来源，改为区分值）。
+    const textStep = assistantNode([{ kind: 'text', text: '你好世界' }], 12)
+    const d = mod.latestTokenDensity([reasoningStep, textStep])
+    expect(d).not.toBeNull()
+    // blended 取最新可用（textStep）：12/4=3；reasoning=10/2.25? 'abcde' 5 narrow → 1.25 weighted → 8。
+  })
+  it('streams a reasoning partial with the reasoning density', async () => {
+    const mod = await import('../src/client/token-rate.ts')
+    const partial = { blocks: [{ kind: 'reasoning', text: 'abcdefgh' }] }
+    const est = mod.streamedTokenEstimate(partial as never, { blended: 3, reasoning: 2, text: 3 })
+    expect(est).toBeCloseTo(8 * 0.25 * 2, 5)
   })
 })

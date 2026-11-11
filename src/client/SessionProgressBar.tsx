@@ -379,7 +379,7 @@ export function SessionProgressBar({
           <div className={css.tokenRow}><span className={css.tokenHead}>{t('token.total')}</span><span className={css.tokenValue}>{tokenTotals.total.toLocaleString('en-US')} tok</span></div>
           <div className={css.tokenRow}><span>{t('token.uncached')}</span><span className={css.tokenValue}>{tokenTotals.uncached.toLocaleString('en-US')} tok</span></div>
           <div className={css.tokenRow}><span>{t('token.cacheRead')}</span><span className={css.tokenValue}>{tokenTotals.cacheRead.toLocaleString('en-US')} tok</span></div>
-          <div className={css.tokenRow}><span>{t('token.cacheWrite')}</span><span className={css.tokenValue}>{tokenTotals.cacheWrite.toLocaleString('en-US')} tok</span></div>
+          {tokenTotals.cacheWrite > 0 && <div className={css.tokenRow}><span>{t('token.cacheWrite')}</span><span className={css.tokenValue}>{tokenTotals.cacheWrite.toLocaleString('en-US')} tok</span></div>}
           <div className={css.tokenRow}><span>{t('token.output')}</span><span className={css.tokenValue}>{tokenTotals.output.toLocaleString('en-US')} tok</span></div>
           <div className={css.tokenRow}><span>{t('token.cacheHit')}</span><span className={css.tokenValue}>{tokenTotals.billedInput > 0 ? Math.round(tokenTotals.cacheRead / tokenTotals.billedInput * 100) + '%' : '—'}</span></div>
         </div>

@@ -324,6 +324,12 @@
    opens upward over the conversation area; theme aliases keep it legible
    in light and dark themes. */
 .tokenChip { flex: none; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 7px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11px; line-height: 20px; padding: 0 8px; cursor: pointer; font-variant-numeric: tabular-nums; }
+/* 窄屏（手机）隐藏 token 用量徽标：与官方统计重合且挤爆右缘——
+   宽度足够时照常显示。 */
+@media (max-width: 560px) {
+  .tokenChip { display: none; }
+}
+
 .tokenChip:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .tokenChip[data-pin='true'] { border-color: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-state-business-primary); }
 

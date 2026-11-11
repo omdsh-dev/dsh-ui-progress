@@ -49,18 +49,37 @@ function usageOutputTokens(usage: unknown): number | null {
  * @returns weighted chars; 0 when nothing is readable.
  */
 export function weightedChars(blocks: readonly AssistantBlock[]): number {
-  let wide = 0
-  let narrow = 0
+  const split = splitWeightedChars(blocks)
+  return split.reasoning + split.text
+}
+
+/** 按内容类型拆分的加权字符量：思考（reasoning）与正文/工具调用分别计量——
+ * 两类内容的分词密度往往不同（思考多为英文链式推理、正文随语言变化），
+ * 分别校准能让流式速率在思考阶段与正文阶段都更贴近真实。 */
+export interface SplitWeighted { reasoning: number, text: number }
+
+/** 逐块分类加权：reasoning 块计入 reasoning，text 与 tool-call 计入 text。 */
+export function splitWeightedChars(blocks: readonly AssistantBlock[]): SplitWeighted {
+  let rWide = 0
+  let rNarrow = 0
+  let tWide = 0
+  let tNarrow = 0
   for (const block of blocks) {
+    const isReasoning = block.kind === 'reasoning'
     const text = block.kind === 'tool-call' ? block.name + block.argsRaw
-      : block.kind === 'text' || block.kind === 'reasoning' ? block.text
+      : block.kind === 'text' || isReasoning ? block.text
       : ''
     for (const char of text) {
-      if (CJK_CHAR.test(char)) wide += 1
-      else narrow += 1
+      if (CJK_CHAR.test(char)) {
+        if (isReasoning) rWide += 1
+        else tWide += 1
+      } else {
+        if (isReasoning) rNarrow += 1
+        else tNarrow += 1
+      }
     }
   }
-  return wide + narrow * NARROW_TOKEN_WEIGHT
+  return { reasoning: rWide + rNarrow * NARROW_TOKEN_WEIGHT, text: tWide + tNarrow * NARROW_TOKEN_WEIGHT }
 }
 
 /**
@@ -83,33 +102,56 @@ export function weightedPartialChars(partial: PartialAssistant | null): number {
  * @param nodes - settled nodes of the loaded window.
  * @returns tokens per weighted char, or null before any usable step settled.
  */
-export function latestTokenDensity(nodes: readonly ConversationNode[]): number | null {
+export interface TokenDensity {
+  /** 思考内容的 tokens/加权字符密度；无样本时与 blended 相同。 */
+  reasoning: number
+  /** 正文/工具调用的密度；无样本时与 blended 相同。 */
+  text: number
+  /** 混合密度（原行为）：整步 output / 整步加权字符。 */
+  blended: number
+}
+
+/**
+ * 分别校准思考与正文的 tokens-per-weighted-char 密度：扫描已结算步骤，
+ * reasoning 加权占比 > 70% 的步骤提供 reasoning 样本，< 30% 提供 text 样本，
+ * 其余只贡献 blended。任何一类无独立样本时回退 blended（原行为）。
+ * @param nodes - 已结算节点窗口。
+ * @returns 三档密度。
+ */
+export function latestTokenDensity(nodes: readonly ConversationNode[]): TokenDensity | null {
+  let blended: number | null = null
+  let reasoningSample: number | null = null
+  let textSample: number | null = null
   for (let i = nodes.length - 1; i >= 0; i -= 1) {
     const node = nodes[i]
     if (node === undefined || node.kind !== 'assistant') continue
     const output = usageOutputTokens(node.usage)
     if (output === null || output <= 0) continue
-    const weighted = weightedChars(node.blocks)
-    if (weighted <= 0) continue
-    return output / weighted
+    const split = splitWeightedChars(node.blocks)
+    const total = split.reasoning + split.text
+    if (total <= 0) continue
+    const density = output / total
+    if (blended === null) blended = density
+    if (reasoningSample === null && split.reasoning > total * 0.7) reasoningSample = output / split.reasoning
+    if (textSample === null && total - split.reasoning > total * 0.7) textSample = output / (total - split.reasoning)
+    if (reasoningSample !== null && textSample !== null && blended !== null) break
   }
-  return null
+  if (blended === null) return null
+  return {
+    blended,
+    reasoning: reasoningSample ?? blended,
+    text: textSample ?? blended,
+  }
 }
 
-/**
- * Estimated tokens streamed so far: weighted chars of the partial scaled by
- * the calibrated density when one is available, else the bare weighted-char
- * heuristic (CJK 1 token, others 1/4). Units are consistent either way, so
- * the displayed rate converges smoothly onto the provider's real usage once
- * a step settles.
- * @param partial - the live streaming partial.
- * @param density - calibration from {@link latestTokenDensity}, or null.
- * @returns estimated streamed tokens; 0 while nothing is emitting.
- */
-export function streamedTokenEstimate(partial: PartialAssistant | null, density: number | null): number {
+export function streamedTokenEstimate(partial: PartialAssistant | null, density: number | null | TokenDensity): number {
   const weighted = weightedPartialChars(partial)
   if (weighted <= 0) return 0
-  return density === null ? weighted : weighted * density
+  if (density === null) return weighted
+  if (typeof density === 'number') return weighted * density
+  // 分密度估算：思考段与正文段各用各的校准系数（无独立样本时回退 blended）。
+  const split = splitWeightedChars(partial!.blocks)
+  return split.reasoning * density.reasoning + split.text * density.text
 }
 
 /**
