@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Progress Bar (dsh-ui-progress)",
+    "description": "Always-on progress strip in the composer dock: live todo progress, token rate & ETA, five-class interrupt causes with colors (invalid key / rate limit / context overflow), background subagent state, and a token usage panel."
+  }
+}

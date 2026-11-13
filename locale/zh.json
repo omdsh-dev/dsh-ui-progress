@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "进度条 (dsh-ui-progress)",
+    "description": "输入框停靠区常驻进度条：todos 真实进度、token 速率与 ETA、中断原因五分类配色（密钥无效 / API 限额 / 上下文超限）、后台子代理青色态、Token 用量面板，窄窗口自适应。"
+  }
+}

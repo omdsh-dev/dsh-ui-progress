@@ -330,6 +330,14 @@
   .tokenChip { display: none; }
 }
 
+/* 窄屏计数器折行：耗时/速率/轮次不再挤出一屏——meta 组允许换行
+   到第二行居中，行距收紧。 */
+@media (max-width: 560px) {
+  .bar { flex-wrap: wrap; row-gap: 2px; }
+  .meta { flex-wrap: wrap; justify-content: flex-end; margin-inline: auto; }
+  .track { order: 3; flex-basis: 100%; }
+}
+
 .tokenChip:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .tokenChip[data-pin='true'] { border-color: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-state-business-primary); }
 
