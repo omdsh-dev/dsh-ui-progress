@@ -74,7 +74,10 @@ const IconWarning = pickIcon('IconWarningOutline16', 'IconWarningOutlineMedium',
 const IconSparkle = pickIcon('IconSparkle16', 'IconSparkleMedium', 'IconSparkleRegular')
 const IconDatabase = pickIcon('IconDatabaseOutline16', 'IconDatabaseOutlineMedium', 'IconDatabaseOutlineRegular')
 import { useEffect, useRef, useState } from 'react'
-import { createSoundEdgeState, nextSoundEvent, SoundCue, soundFrameOf } from './sounds.ts'
+import { SoundBridge, soundFrameOf } from './sounds.ts'
+
+/** 模块级声音桥：跨进度条卸载周期存活（卡片接管期间继续定音）。 */
+const bridge = new SoundBridge()
 import type { ReactNode } from 'react'
 import css from './SessionProgressBar.module.css'
 import {
@@ -294,31 +297,29 @@ export function SessionProgressBar({
   // 主回合中断但后台仍在跑 → 显示后台态（青色转圈），不显示中断。
   const spin = running || background
 
-  // 提示音（Codex 式）：状态跃迁边沿触发；沙箱类审批从待决 kind 近似
-  // （approval 泛指许可请求，沙箱提权是其中最常见的一类——低频双击区
-  // 分于普通提问/计划审阅的双音铃）。静音开关持久化到 localStorage。
-  const soundRef = useRef<SoundCue | null>(null)
-  const edgeRef = useRef<ReturnType<typeof createSoundEdgeState> | null>(null)
+  // 提示音（Codex 式）：状态跃迁边沿触发；声音桥是模块级单例——
+  // 审批/提问卡片顶掉 composer 槽位时本组件卸载，桥跨卸载存活并按
+  // 「运行中卸载=卡片接管」定音（ask_user_question→钟声，其余→沙箱音）。
   const [soundMuted, setSoundMuted] = useState(() => window.localStorage.getItem('dsh-ui-progress-sound-muted') === '1')
   const frame = soundFrameOf(running, pending, ownPending, interrupted, errored, turn)
   useEffect(() => {
-    const cue = soundRef.current ?? (soundRef.current = new SoundCue())
-    cue.setMuted(window.localStorage.getItem('dsh-ui-progress-sound-muted') === '1')
-    // 手势解锁：确保首个提示音不被浏览器自动播放策略吞掉。
-    cue.registerUnlock()
+    bridge.registerUnlock()
+    bridge.setMuted(window.localStorage.getItem('dsh-ui-progress-sound-muted') === '1')
+    bridge.markMounted()
+    return () => { bridge.markUnmounted(frameRef.current) }
   }, [])
+  const frameRef = useRef(frame)
+  frameRef.current = frame
   useEffect(() => {
-    const edge = edgeRef.current ?? (edgeRef.current = createSoundEdgeState(frame))
-    const ev = nextSoundEvent(edge, frame)
-    if (ev !== null) soundRef.current?.play(ev)
+    bridge.update(frame, toolName)
   })
   const toggleSound = (): void => {
     const next = !soundMuted
     setSoundMuted(next)
     window.localStorage.setItem('dsh-ui-progress-sound-muted', next ? '1' : '0')
-    soundRef.current?.setMuted(next)
+    bridge.setMuted(next)
     // 开启即试音：点击本身是用户手势，完成琶音当场可闻——兼作音频通路自检。
-    if (!next) soundRef.current?.play('complete')
+    if (!next) bridge.testTone()
   }
   // Session-wide token usage behind a hover/click panel: the chip shows
   // the running total, the panel breaks it down uncached/cache-read/write

@@ -247,3 +247,88 @@ export function soundFrameOf(
     turnCount,
   }
 }
+
+/**
+ * 声音桥（模块级单例）：跨越进度条组件的卸载周期存活。
+ *
+ * 为什么需要：审批/提问卡片以更高优先级顶掉 conversation.composer
+ * 槽位，住在 input dock 里的进度条随之卸载——待决出现的那一刻恰好
+ * 没有任何组件在监听。桥的对策：
+ * - 正常帧边沿照常检测（完成/中断）。
+ * - 卸载即信号：运行中的卸载 = 卡片接管。600ms 内未重挂载（排除
+ *   会话切换的重挂载）则按卸载时在跑的工具定音——ask_user_question
+ *   → attention 钟声，其他 → sandbox 警示音；同时把边沿状态推进到
+ *   「已待决」合成帧，重挂载后真实帧不会重复响。
+ */
+export class SoundBridge {
+  private cue = new SoundCue()
+  private edge: SoundEdgeState | null = null
+  private lastTool: string | undefined = undefined
+  private takeoverTimer: number | undefined = undefined
+  private takeoverArmed = false
+
+  /** 静音状态（进度条按钮切换；持久化由调用方做）。 */
+  setMuted(muted: boolean): void {
+    this.cue.setMuted(muted)
+  }
+
+  isMuted(): boolean {
+    return this.cue.isMuted()
+  }
+
+  /** 解锁音频（挂载时注册手势监听）。 */
+  registerUnlock(): void {
+    this.cue.registerUnlock()
+  }
+
+  /** 试音（喇叭按钮开启时）。 */
+  testTone(): void {
+    this.cue.play('complete')
+  }
+
+  /**
+   * 进度条每帧上报：驱动常规边沿（完成/中断/待决出现）。
+   * @param frame - 帧摘要。
+   * @param runningTool - 当前在跑的工具名（卸载定音用）。
+   */
+  update(frame: SoundFrame, runningTool: string | undefined): void {
+    this.lastTool = runningTool
+    this.edge = this.edge ?? createSoundEdgeState(frame)
+    const ev = nextSoundEvent(this.edge, frame)
+    if (ev !== null) this.cue.play(ev)
+  }
+
+  /**
+   * 进度条挂载：取消未决的接管音（快速重挂载=会话切换，非卡片）。
+   */
+  markMounted(): void {
+    if (this.takeoverTimer !== undefined) {
+      window.clearTimeout(this.takeoverTimer)
+      this.takeoverTimer = undefined
+    }
+    this.takeoverArmed = false
+  }
+
+  /**
+   * 进度条卸载：运行中卸载视为卡片接管——600ms 内未重挂载则播放对应
+   * 音，并把边沿状态推进到「已待决」防止重挂载重复响。
+   * @param frame - 卸载时的最后帧。
+   */
+  markUnmounted(frame: SoundFrame): void {
+    if (!frame.running || this.takeoverTimer !== undefined) return
+    this.takeoverArmed = true
+    this.takeoverTimer = window.setTimeout(() => {
+      this.takeoverTimer = undefined
+      if (!this.takeoverArmed) return
+      this.takeoverArmed = false
+      // 定音：ask_user_question 卡片=提问；其余在跑工具被停=审批/沙箱。
+      const ev: SoundEvent = this.lastTool !== undefined && this.lastTool.includes('ask') ? 'attention' : 'sandbox'
+      this.cue.play(ev)
+      // 边沿推进到「已待决」：重挂载后真实帧（pending=true）不再触发。
+      if (this.edge !== null) {
+        this.edge.prev = { ...frame, pending: true, sandboxPending: ev === 'sandbox' }
+        this.edge.lastFired = ev
+      }
+    }, 600)
+  }
+}
