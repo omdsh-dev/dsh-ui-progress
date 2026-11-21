@@ -317,6 +317,8 @@ export function SessionProgressBar({
     setSoundMuted(next)
     window.localStorage.setItem('dsh-ui-progress-sound-muted', next ? '1' : '0')
     soundRef.current?.setMuted(next)
+    // 开启即试音：点击本身是用户手势，完成琶音当场可闻——兼作音频通路自检。
+    if (!next) soundRef.current?.play('complete')
   }
   // Session-wide token usage behind a hover/click panel: the chip shows
   // the running total, the panel breaks it down uncached/cache-read/write

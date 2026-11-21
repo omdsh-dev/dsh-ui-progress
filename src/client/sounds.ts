@@ -153,6 +153,9 @@ export class SoundCue {
    * 的首个 pointerdown/keydown 上主动 resume，任何点击过 GUI 的用户
    * 此后提示音都有效。
    */
+  /** 被自动播放策略吞掉的事件队列（解锁后补播，最多留最近一个）。 */
+  private queued: SoundEvent | null = null
+
   registerUnlock(): void {
     const unlock = (): void => {
       try {
@@ -162,6 +165,10 @@ export class SoundCue {
           this.ctx = new AC()
         }
         if (this.ctx.state === 'suspended') void this.ctx.resume()
+        // 手势已发生：补播被吞的事件（若 resume 稍后完成，play 内部会再排一次，无碍）。
+        const pending = this.queued
+        this.queued = null
+        if (pending !== null && !this.muted) this.play(pending)
       } catch {
         // 无音频环境：静默降级。
       }
