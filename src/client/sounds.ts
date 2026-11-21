@@ -5,8 +5,9 @@
  * 跃迁边沿产出一个声音事件——重复渲染、状态保持不响。可单测。
  *
  * 播放（SoundCue）：Web Audio 振荡器合成四种短音（无资源文件）：
- * complete 上行大三和弦琶音 / interrupted 下行小二度 / attention 双音
- * 提示铃 / sandbox 低频双击。AudioContext 由首次用户手势解锁（浏览器
+ * complete 上行大三和弦琶音 C5-E5-G5 / interrupted 高音区三音下行
+ * A5-G5-E5 / attention 回环 C6-G5-C6 带钟声泛音 / sandbox 增五度
+ * F5-B5 断奏交替。AudioContext 由首次用户手势解锁（浏览器
  * 自动播放策略），未解锁前静默跳过。
  */
 import type { PendingKind } from './SessionProgressBar.tsx'
@@ -83,24 +84,49 @@ export function nextSoundEvent(state: SoundEdgeState, frame: SoundFrame): SoundE
   return fire
 }
 
-/** 各事件的音色参数（频率 Hz / 时长 s / 音量 / 波形 / 音符间隔）。 */
-interface Tone {
-  freqs: number[]
-  gap: number
+/** 单个音符参数：起始偏移/频率/时长/音量/波形。 */
+interface Note {
+  t0: number
+  freq: number
   dur: number
   volume: number
-  type: OscillatorType
+  type?: OscillatorType
 }
+
+/** 各事件的音色：一组音符（含可能的泛音叠加）。 */
+type Tone = Note[]
+
+/** A5/G5/E5/C6/B5/F5 频率（Hz）。 */
+const F = { A5: 880, G5: 783.99, E5: 659.25, C6: 1046.5, B5: 987.77, F5: 698.46 }
 
 const TONES: Record<SoundEvent, Tone> = {
   // 上行大三和弦琶音（C5-E5-G5）——完成的愉悦感。
-  complete: { freqs: [523.25, 659.25, 783.99], gap: 0.09, dur: 0.16, volume: 0.16, type: 'sine' },
-  // 下行小二度（E4-Eb4）——中断的顿挫感。
-  interrupted: { freqs: [329.63, 311.13], gap: 0.12, dur: 0.18, volume: 0.14, type: 'triangle' },
-  // 双音提示铃（A5-A5）——需要用户注意。
-  attention: { freqs: [880, 880], gap: 0.14, dur: 0.1, volume: 0.14, type: 'sine' },
-  // 低频双击（D3-D3 方波弱音）——沙箱操作等待。
-  sandbox: { freqs: [146.83, 146.83], gap: 0.11, dur: 0.07, volume: 0.18, type: 'square' },
+  complete: [
+    { t0: 0, freq: 523.25, dur: 0.28, volume: 0.16 },
+    { t0: 0.16, freq: 659.25, dur: 0.28, volume: 0.16 },
+    { t0: 0.32, freq: 783.99, dur: 0.5, volume: 0.16 },
+  ],
+  // 高音区三音下行（A5-G5-E5）——轻落的"叹气"感，与完成音的向上镜像。
+  interrupted: [
+    { t0: 0, freq: F.A5, dur: 0.12, volume: 0.22 },
+    { t0: 0.11, freq: F.G5, dur: 0.12, volume: 0.25 },
+    { t0: 0.22, freq: F.E5, dur: 0.32, volume: 0.3 },
+  ],
+  // 小回环（C6-G5-C6）+ 钟声泛音——招手"看一下我"。
+  attention: [
+    { t0: 0, freq: F.C6, dur: 0.12, volume: 0.22 },
+    { t0: 0, freq: F.C6 * 2.4, dur: 0.06, volume: 0.05 },
+    { t0: 0.11, freq: F.G5, dur: 0.12, volume: 0.22 },
+    { t0: 0.22, freq: F.C6, dur: 0.4, volume: 0.3 },
+    { t0: 0.22, freq: F.C6 * 2.4, dur: 0.15, volume: 0.07 },
+  ],
+  // 增五度交替（F5-B5 ×2，断奏方波）——不协和的点状警示。
+  sandbox: [
+    { t0: 0, freq: F.F5, dur: 0.07, volume: 0.09, type: 'square' },
+    { t0: 0.09, freq: F.B5, dur: 0.07, volume: 0.1, type: 'square' },
+    { t0: 0.22, freq: F.F5, dur: 0.07, volume: 0.09, type: 'square' },
+    { t0: 0.31, freq: F.B5, dur: 0.12, volume: 0.11, type: 'square' },
+  ],
 }
 
 /**
@@ -121,6 +147,32 @@ export class SoundCue {
   }
 
   /**
+   * 注册一次性用户手势解锁：浏览器自动播放策略下，AudioContext 在
+   * 手势外创建即 suspended 且 resume 静默失败——第一次 play 若发生在
+   * 渲染 effect 里（非点击处理器），声音可能永远不出。挂在 window
+   * 的首个 pointerdown/keydown 上主动 resume，任何点击过 GUI 的用户
+   * 此后提示音都有效。
+   */
+  registerUnlock(): void {
+    const unlock = (): void => {
+      try {
+        if (this.ctx === null) {
+          const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+          if (AC === undefined) return
+          this.ctx = new AC()
+        }
+        if (this.ctx.state === 'suspended') void this.ctx.resume()
+      } catch {
+        // 无音频环境：静默降级。
+      }
+      window.removeEventListener('pointerdown', unlock)
+      window.removeEventListener('keydown', unlock)
+    }
+    window.addEventListener('pointerdown', unlock, { once: false })
+    window.addEventListener('keydown', unlock, { once: false })
+  }
+
+  /**
    * 播放一个事件音。AudioContext 未创建/被浏览器挂起时静默跳过
    * （首次点击 GUI 后下一次调用即可出声）。
    * @param event - 事件种类。
@@ -137,22 +189,54 @@ export class SoundCue {
       if (ctx.state === 'suspended') { void ctx.resume() }
       const tone = TONES[event]
       const now = ctx.currentTime
-      tone.freqs.forEach((freq, i) => {
+      for (const note of tone) {
         const osc = ctx.createOscillator()
         const gain = ctx.createGain()
-        osc.type = tone.type
-        osc.frequency.value = freq
-        const start = now + i * tone.gap
+        osc.type = note.type ?? 'sine'
+        osc.frequency.value = note.freq
+        const start = now + note.t0
         gain.gain.setValueAtTime(0, start)
-        gain.gain.linearRampToValueAtTime(tone.volume, start + 0.012)
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + tone.dur)
+        gain.gain.linearRampToValueAtTime(note.volume, start + 0.012)
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + note.dur)
         osc.connect(gain)
         gain.connect(ctx.destination)
         osc.start(start)
-        osc.stop(start + tone.dur + 0.02)
-      })
+        osc.stop(start + note.dur + 0.02)
+      }
     } catch {
       // 音频不可用（无头环境/策略限制）：静默降级。
     }
+  }
+}
+
+/**
+ * 从条状态派生值拼装帧摘要（纯函数，供组件与测试共用）。
+ *
+ * 沙箱近似：ownPending === 'approval' 视为沙箱类（许可请求域里沙箱
+ * 提权是最常见的一类；提问/计划审阅走 attention 音）。
+ *
+ * @param running - 回合运行中。
+ * @param pending - 本会话或子代理树有待决交互。
+ * @param ownPending - 自己的待决种类（可能为 null——子代理的待决）。
+ * @param interrupted - 最近完成回合中断。
+ * @param errored - 最近完成回合错误。
+ * @param turnCount - 已完成回合数。
+ */
+export function soundFrameOf(
+  running: boolean,
+  pending: boolean,
+  ownPending: PendingKind | null,
+  interrupted: boolean,
+  errored: boolean,
+  turnCount: number,
+): SoundFrame {
+  return {
+    running,
+    pending,
+    ownPendingKind: ownPending,
+    sandboxPending: ownPending === 'approval',
+    interrupted,
+    errored,
+    turnCount,
   }
 }

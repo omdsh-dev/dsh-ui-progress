@@ -74,7 +74,7 @@ const IconWarning = pickIcon('IconWarningOutline16', 'IconWarningOutlineMedium',
 const IconSparkle = pickIcon('IconSparkle16', 'IconSparkleMedium', 'IconSparkleRegular')
 const IconDatabase = pickIcon('IconDatabaseOutline16', 'IconDatabaseOutlineMedium', 'IconDatabaseOutlineRegular')
 import { useEffect, useRef, useState } from 'react'
-import { createSoundEdgeState, nextSoundEvent, SoundCue, type SoundFrame } from './sounds.ts'
+import { createSoundEdgeState, nextSoundEvent, SoundCue, soundFrameOf } from './sounds.ts'
 import type { ReactNode } from 'react'
 import css from './SessionProgressBar.module.css'
 import {
@@ -300,18 +300,12 @@ export function SessionProgressBar({
   const soundRef = useRef<SoundCue | null>(null)
   const edgeRef = useRef<ReturnType<typeof createSoundEdgeState> | null>(null)
   const [soundMuted, setSoundMuted] = useState(() => window.localStorage.getItem('dsh-ui-progress-sound-muted') === '1')
-  const frame: SoundFrame = {
-    running,
-    pending,
-    ownPendingKind: ownPending,
-    sandboxPending: ownPending === 'approval',
-    interrupted,
-    errored,
-    turnCount: turn,
-  }
+  const frame = soundFrameOf(running, pending, ownPending, interrupted, errored, turn)
   useEffect(() => {
     const cue = soundRef.current ?? (soundRef.current = new SoundCue())
     cue.setMuted(window.localStorage.getItem('dsh-ui-progress-sound-muted') === '1')
+    // 手势解锁：确保首个提示音不被浏览器自动播放策略吞掉。
+    cue.registerUnlock()
   }, [])
   useEffect(() => {
     const edge = edgeRef.current ?? (edgeRef.current = createSoundEdgeState(frame))
