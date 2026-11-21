@@ -347,3 +347,18 @@
 .tokenRow span:first-child { color: var(--dsw-alias-label-secondary); }
 .tokenHead { font-weight: 600; color: var(--dsw-alias-label-primary) !important; }
 .tokenValue { font-variant-numeric: tabular-nums; }
+
+/* 提示音开关：与百分比同行的小按钮，静音态降不透明度。 */
+.soundToggle {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.soundToggle:hover {
+  opacity: 1;
+}

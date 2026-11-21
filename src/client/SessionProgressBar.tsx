@@ -73,7 +73,8 @@ const IconLoading = pickIcon('IconLoadingOutline16', 'IconLoadingOutlineMedium',
 const IconWarning = pickIcon('IconWarningOutline16', 'IconWarningOutlineMedium', 'IconWarningOutlineRegular')
 const IconSparkle = pickIcon('IconSparkle16', 'IconSparkleMedium', 'IconSparkleRegular')
 const IconDatabase = pickIcon('IconDatabaseOutline16', 'IconDatabaseOutlineMedium', 'IconDatabaseOutlineRegular')
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createSoundEdgeState, nextSoundEvent, SoundCue, type SoundFrame } from './sounds.ts'
 import type { ReactNode } from 'react'
 import css from './SessionProgressBar.module.css'
 import {
@@ -113,7 +114,7 @@ export interface SubagentPending {
 }
 
 /** The three pending-interaction kinds the strip labels; null for unknown kinds. */
-type PendingKind = 'approval' | 'question' | 'plan-review'
+export type PendingKind = 'approval' | 'question' | 'plan-review'
 
 /** Narrow a pending-interaction discriminator to the labeled kinds. */
 function pendingKindOf(kind: string | null | undefined): PendingKind | null {
@@ -292,6 +293,37 @@ export function SessionProgressBar({
   // 转圈=有活在干：主回合运行中，或主会话空闲但后台（子代理/任务）真在跑。
   // 主回合中断但后台仍在跑 → 显示后台态（青色转圈），不显示中断。
   const spin = running || background
+
+  // 提示音（Codex 式）：状态跃迁边沿触发；沙箱类审批从待决 kind 近似
+  // （approval 泛指许可请求，沙箱提权是其中最常见的一类——低频双击区
+  // 分于普通提问/计划审阅的双音铃）。静音开关持久化到 localStorage。
+  const soundRef = useRef<SoundCue | null>(null)
+  const edgeRef = useRef<ReturnType<typeof createSoundEdgeState> | null>(null)
+  const [soundMuted, setSoundMuted] = useState(() => window.localStorage.getItem('dsh-ui-progress-sound-muted') === '1')
+  const frame: SoundFrame = {
+    running,
+    pending,
+    ownPendingKind: ownPending,
+    sandboxPending: ownPending === 'approval',
+    interrupted,
+    errored,
+    turnCount: turn,
+  }
+  useEffect(() => {
+    const cue = soundRef.current ?? (soundRef.current = new SoundCue())
+    cue.setMuted(window.localStorage.getItem('dsh-ui-progress-sound-muted') === '1')
+  }, [])
+  useEffect(() => {
+    const edge = edgeRef.current ?? (edgeRef.current = createSoundEdgeState(frame))
+    const ev = nextSoundEvent(edge, frame)
+    if (ev !== null) soundRef.current?.play(ev)
+  })
+  const toggleSound = (): void => {
+    const next = !soundMuted
+    setSoundMuted(next)
+    window.localStorage.setItem('dsh-ui-progress-sound-muted', next ? '1' : '0')
+    soundRef.current?.setMuted(next)
+  }
   // Session-wide token usage behind a hover/click panel: the chip shows
   // the running total, the panel breaks it down uncached/cache-read/write
   // and output with the cache-hit percentage. The durable tokenUsage
@@ -346,6 +378,7 @@ export function SessionProgressBar({
           {running && !pending && <div className={css.shimmer} />}
         </div>
         <span className={css.percent}>{percent}%</span>
+        <button type="button" className={css.soundToggle} onClick={toggleSound} title={soundMuted ? '开启提示音' : '静音提示音'} aria-label={soundMuted ? '开启提示音' : '静音提示音'}>{soundMuted ? '\u{1F507}' : '\u{1F514}'}</button>
         {/* The meta group keeps the trailing counters as one unbreakable
             flex item: at narrow composer widths the whole group wraps to a
             second line right after the percent instead of cramming one row. */}
