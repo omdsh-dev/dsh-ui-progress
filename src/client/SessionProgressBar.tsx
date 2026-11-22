@@ -318,7 +318,7 @@ export function SessionProgressBar({
   const frameRef = useRef(frame)
   frameRef.current = frame
   useEffect(() => {
-    bridge.update(frame, toolName)
+    bridge.update(frame, toolName, sessionId ?? null)
   })
   const toggleSound = (): void => {
     const next = !soundMuted

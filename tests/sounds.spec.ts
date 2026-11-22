@@ -208,3 +208,15 @@ describe('settle holds during background (manual interrupt teal phase)', () => {
     expect(nextSoundEvent(st, frame({ running: false, background: false, interrupted: true }))).toBe('interrupted')
   })
 })
+
+// @vitest-environment jsdom
+describe('session switch resync', () => {
+  it('switching into an interrupted session does not fire (first frame silent)', () => {
+    const bridge = new SoundBridge()
+    bridge.update(frame({ running: true, turnCount: 1 }), 'run_code', 'session-a')
+    // 中断会话 a 后切到已是中断态的会话 b：首帧不发声、不抛错。
+    expect(() => bridge.update(frame({ running: false, interrupted: true, turnCount: 1 }), undefined, 'session-b')).not.toThrow()
+    // 同会话后续帧正常推进（不重复响——lastFired 已由建档帧吸收）。
+    expect(() => bridge.update(frame({ running: false, interrupted: true, turnCount: 1 }), undefined, 'session-b')).not.toThrow()
+  })
+})

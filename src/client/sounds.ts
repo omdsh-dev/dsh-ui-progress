@@ -321,12 +321,24 @@ export class SoundBridge {
    * @param frame - 帧摘要。
    * @param runningTool - 当前在跑的工具名（卸载定音用）。
    */
+  /** 当前会话标识：切换会话时重同步边沿状态（prev 属于旧会话，跨会话比较会产生假上升沿）。 */
+  private sessionId: string | null = null
   /** 收束延迟定音计时器。 */
   private settleTimer: number | undefined = undefined
   /** 挂起期间最新的干净收束帧。 */
   private lastSettleFrame: SoundFrame | null = null
 
-  update(frame: SoundFrame, runningTool: string | undefined): void {
+  update(frame: SoundFrame, runningTool: string | undefined, sessionId: string | null = null): void {
+    // 会话切换：以当前帧重建边沿基准——切进一个已是中断/完成态的会话时
+    // 首帧只建档不发声（原先跨会话的假上升沿会凭空播中断音）。
+    if (sessionId !== this.sessionId) {
+      this.sessionId = sessionId
+      if (this.settleTimer !== undefined) { window.clearTimeout(this.settleTimer); this.settleTimer = undefined }
+      this.lastSettleFrame = null
+      this.edge = createSoundEdgeState(frame)
+      dbg('session switched — edge resynced (first frame silent)')
+      return
+    }
     dbg('frame run=' + String(frame.running) + ' pend=' + String(frame.pending) + ' bg=' + String(frame.background) + ' tool=' + String(runningTool))
     this.lastTool = runningTool
     this.edge = this.edge ?? createSoundEdgeState(frame)
