@@ -237,7 +237,7 @@ function formatTokenCount(n: number): string {
  */
 export function SessionProgressBar({
   session, sessionId, t, useConversation, useProjection, useSessions, useSessionPendingInteraction,
-  useSessionStatus,
+  ...restProps
 }: SessionProgressBarProps) {
   // Defensive guard: the InputZone owner share types session non-null, but a
   // host passing no session must degrade to an empty dock instead of crashing.
@@ -273,7 +273,9 @@ export function SessionProgressBar({
   // (multi-instance refactor): degrade to no pending/subagent detection.
   const pendingBySession = useSessionPendingInteraction?.(interactions => interactions) ?? EMPTY_INTERACTIONS
   // 会话状态钩子（0.2.x 标准套件）：直接读 pendingInteraction——比全局
-  // interactions 席位更根本的通道；宿主未提供时为 undefined 走启发式。
+  // interactions 席位更根本的通道。当前类型声明未含此钩子，防御性 cast
+  // 读取；宿主未提供时为 undefined 走启发式。
+  const useSessionStatus = (restProps as unknown as { useSessionStatus?: (select: (snapshot: ReadonlyMap<string, { pendingInteraction?: { kind?: string } }>) => unknown) => unknown }).useSessionStatus
   const statusPendingRaw = useSessionStatus?.((snapshot: ReadonlyMap<string, { pendingInteraction?: { kind?: string } }>) => snapshot.get(sessionId)?.pendingInteraction?.kind)
   const statusKind = typeof statusPendingRaw === 'string' ? statusPendingRaw : null
   const ownPending = pendingKindOf(pendingBySession.get(sessionId)?.kind)
