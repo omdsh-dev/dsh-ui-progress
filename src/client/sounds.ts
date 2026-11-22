@@ -12,6 +12,13 @@
  */
 import type { PendingKind } from './SessionProgressBar.tsx'
 
+/** 调试开关：控制台输出声音桥事件（提示音排查用）。 */
+export const SOUND_DEBUG = true
+
+function dbg(msg: string): void {
+  if (SOUND_DEBUG) console.log('[dsh-ui-progress/sound] ' + msg)
+}
+
 /** 声音事件种类。 */
 export type SoundEvent = 'complete' | 'interrupted' | 'attention' | 'sandbox'
 
@@ -31,6 +38,10 @@ export interface SoundFrame {
   errored: boolean
   /** 是否完成过至少一个回合（用于完成音的判定）。 */
   turnCount: number
+  /** 会话状态快照里的待决种类（精确通道）；不可用为 null。 */
+  statusKind: string | null
+  /** 当前在跑的工具是否为 ask 类（启发式回退通道）。 */
+  askTool: boolean
 }
 
 /** 边沿检测内部状态：上次帧摘要 + 已为该事件发过声的标记。 */
@@ -67,11 +78,14 @@ export function nextSoundEvent(state: SoundEdgeState, frame: SoundFrame): SoundE
   const prev = state.prev
   let fire: SoundEvent | null = null
   // 1) 等待用户：出现（或升级为沙箱）待决。
+  const pendingNow = frame.sandboxPending || frame.pending || (frame.statusKind !== null) || frame.askTool
+  const pendingPrev = prev.sandboxPending || prev.pending || (prev.statusKind !== null) || prev.askTool
   if (frame.sandboxPending && !prev.sandboxPending) fire = 'sandbox'
-  else if (frame.pending && !prev.pending) fire = 'attention'
+  else if (!frame.sandboxPending && frame.statusKind === 'approval' && prev.statusKind !== 'approval') fire = 'sandbox'
+  else if (pendingNow && !pendingPrev) fire = 'attention'
   else if (frame.pending && prev.pending && !prev.sandboxPending && frame.sandboxPending) fire = 'sandbox'
-  // 2) 回合收束：中断。
-  else if (prev.running && !frame.running && frame.interrupted) fire = 'interrupted'
+  // 2) 回合收束：中断或错误（API 限流/供应商失败）都响——都是「任务意外停了」。
+  else if (prev.running && !frame.running && (frame.interrupted || frame.errored)) fire = 'interrupted'
   // 3) 回合收束：干净完成（errored 优先级归入 interrupted 同级但不响完成音）。
   else if (prev.running && !frame.running && !frame.interrupted && !frame.errored && frame.turnCount > 0) fire = 'complete'
   state.prev = frame
@@ -164,6 +178,7 @@ export class SoundCue {
           if (AC === undefined) return
           this.ctx = new AC()
         }
+        dbg('unlock gesture — ctx ' + (this.ctx?.state ?? 'n/a'))
         if (this.ctx.state === 'suspended') void this.ctx.resume()
         // 手势已发生：补播被吞的事件（若 resume 稍后完成，play 内部会再排一次，无碍）。
         const pending = this.queued
@@ -185,6 +200,7 @@ export class SoundCue {
    * @param event - 事件种类。
    */
   play(event: SoundEvent): void {
+    dbg('play ' + event + ' muted=' + String(this.muted) + ' ctx=' + (this.ctx === null ? 'null' : this.ctx.state))
     if (this.muted) return
     try {
       if (this.ctx === null) {
@@ -236,15 +252,23 @@ export function soundFrameOf(
   interrupted: boolean,
   errored: boolean,
   turnCount: number,
+  statusKind: string | null = null,
+  runningTool: string | undefined = undefined,
 ): SoundFrame {
+  const askTool = runningTool !== undefined && runningTool.includes('ask')
+  // 精确通道优先：状态快照的 kind；否则旧席位近似；提问类工具回退。
+  const sandbox = statusKind === 'approval' || (statusKind === null && ownPending === 'approval')
+  const attentionFallback = statusKind === null && !sandbox && askTool
   return {
     running,
-    pending,
+    pending: pending || attentionFallback || statusKind !== null,
     ownPendingKind: ownPending,
-    sandboxPending: ownPending === 'approval',
+    sandboxPending: sandbox,
     interrupted,
     errored,
     turnCount,
+    statusKind,
+    askTool,
   }
 }
 
@@ -292,6 +316,7 @@ export class SoundBridge {
    * @param runningTool - 当前在跑的工具名（卸载定音用）。
    */
   update(frame: SoundFrame, runningTool: string | undefined): void {
+    dbg('frame run=' + String(frame.running) + ' pend=' + String(frame.pending) + ' tool=' + String(runningTool))
     this.lastTool = runningTool
     this.edge = this.edge ?? createSoundEdgeState(frame)
     const ev = nextSoundEvent(this.edge, frame)
@@ -302,6 +327,7 @@ export class SoundBridge {
    * 进度条挂载：取消未决的接管音（快速重挂载=会话切换，非卡片）。
    */
   markMounted(): void {
+    dbg('strip mounted')
     if (this.takeoverTimer !== undefined) {
       window.clearTimeout(this.takeoverTimer)
       this.takeoverTimer = undefined
@@ -316,6 +342,7 @@ export class SoundBridge {
    */
   markUnmounted(frame: SoundFrame): void {
     if (!frame.running || this.takeoverTimer !== undefined) return
+    dbg('unmount while running — arming takeover (tool=' + String(this.lastTool) + ')')
     this.takeoverArmed = true
     this.takeoverTimer = window.setTimeout(() => {
       this.takeoverTimer = undefined
@@ -323,6 +350,7 @@ export class SoundBridge {
       this.takeoverArmed = false
       // 定音：ask_user_question 卡片=提问；其余在跑工具被停=审批/沙箱。
       const ev: SoundEvent = this.lastTool !== undefined && this.lastTool.includes('ask') ? 'attention' : 'sandbox'
+      dbg('takeover fired → ' + ev)
       this.cue.play(ev)
       // 边沿推进到「已待决」：重挂载后真实帧（pending=true）不再触发。
       if (this.edge !== null) {

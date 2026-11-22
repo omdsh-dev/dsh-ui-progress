@@ -10,6 +10,8 @@ function frame(over: Partial<SoundFrame> = {}): SoundFrame {
     interrupted: false,
     errored: false,
     turnCount: 1,
+    statusKind: null,
+    askTool: false,
     ...over,
   }
 }
@@ -26,9 +28,21 @@ describe('sound edge detection', () => {
     expect(nextSoundEvent(st, frame({ running: false, interrupted: true }))).toBe('interrupted')
   })
 
-  it('running → errored emits nothing (error palette suffices)', () => {
+  it('running → errored (API 限流) also emits interrupted tone', () => {
     const st = createSoundEdgeState(frame({ running: true }))
-    expect(nextSoundEvent(st, frame({ running: false, errored: true }))).toBe(null)
+    expect(nextSoundEvent(st, frame({ running: false, errored: true }))).toBe('interrupted')
+  })
+
+  it('statusKind approval from session-status fires sandbox directly', () => {
+    const st = createSoundEdgeState(frame({ running: true }))
+    expect(nextSoundEvent(st, frame({ running: true, statusKind: 'approval' }))).toBe('sandbox')
+  })
+
+  it('statusKind question fires attention; ask-tool fallback fires attention', () => {
+    const a = createSoundEdgeState(frame({ running: true }))
+    expect(nextSoundEvent(a, frame({ running: true, statusKind: 'question' }))).toBe('attention')
+    const b = createSoundEdgeState(frame({ running: true }))
+    expect(nextSoundEvent(b, frame({ running: true, askTool: true }))).toBe('attention')
   })
 
   it('pending appearing emits attention; escalating to sandbox emits sandbox', () => {
@@ -68,6 +82,16 @@ describe('soundFrameOf mapping', () => {
     expect(soundFrameOf(true, true, 'question', false, false, 1).sandboxPending).toBe(false)
     expect(soundFrameOf(true, true, 'plan-review', false, false, 1).sandboxPending).toBe(false)
     expect(soundFrameOf(true, true, null, false, false, 1).sandboxPending).toBe(false)
+  })
+
+  it('statusKind overrides: approval→sandbox, question→attention, ask-tool fallback', () => {
+    expect(soundFrameOf(true, false, null, false, false, 1, 'approval').sandboxPending).toBe(true)
+    expect(soundFrameOf(true, false, null, false, false, 1, 'approval').pending).toBe(true)
+    expect(soundFrameOf(true, false, null, false, false, 1, 'question').sandboxPending).toBe(false)
+    expect(soundFrameOf(true, false, null, false, false, 1, 'question').pending).toBe(true)
+    expect(soundFrameOf(true, false, null, false, false, 1, null, 'ask_user_question').askTool).toBe(true)
+    expect(soundFrameOf(true, false, null, false, false, 1, null, 'ask_user_question').pending).toBe(true)
+    expect(soundFrameOf(true, false, null, false, false, 1, null, 'run_code').pending).toBe(false)
   })
 })
 

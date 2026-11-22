@@ -237,6 +237,7 @@ function formatTokenCount(n: number): string {
  */
 export function SessionProgressBar({
   session, sessionId, t, useConversation, useProjection, useSessions, useSessionPendingInteraction,
+  useSessionStatus,
 }: SessionProgressBarProps) {
   // Defensive guard: the InputZone owner share types session non-null, but a
   // host passing no session must degrade to an empty dock instead of crashing.
@@ -271,6 +272,10 @@ export function SessionProgressBar({
   // dsh 0.1.6-alpha.2 removed both global seats from the dock standard kit
   // (multi-instance refactor): degrade to no pending/subagent detection.
   const pendingBySession = useSessionPendingInteraction?.(interactions => interactions) ?? EMPTY_INTERACTIONS
+  // 会话状态钩子（0.2.x 标准套件）：直接读 pendingInteraction——比全局
+  // interactions 席位更根本的通道；宿主未提供时为 undefined 走启发式。
+  const statusPendingRaw = useSessionStatus?.((snapshot: ReadonlyMap<string, { pendingInteraction?: { kind?: string } }>) => snapshot.get(sessionId)?.pendingInteraction?.kind)
+  const statusKind = typeof statusPendingRaw === 'string' ? statusPendingRaw : null
   const ownPending = pendingKindOf(pendingBySession.get(sessionId)?.kind)
   const sessionsById = useSessions?.(s => s.byId) ?? EMPTY_BY_ID
   const subPending = subagentPendingState(sessionsById, pendingBySession, sessionId)
@@ -301,7 +306,7 @@ export function SessionProgressBar({
   // 审批/提问卡片顶掉 composer 槽位时本组件卸载，桥跨卸载存活并按
   // 「运行中卸载=卡片接管」定音（ask_user_question→钟声，其余→沙箱音）。
   const [soundMuted, setSoundMuted] = useState(() => window.localStorage.getItem('dsh-ui-progress-sound-muted') === '1')
-  const frame = soundFrameOf(running, pending, ownPending, interrupted, errored, turn)
+  const frame = soundFrameOf(running, pending, ownPending, interrupted, errored, turn, statusKind, toolName)
   useEffect(() => {
     bridge.registerUnlock()
     bridge.setMuted(window.localStorage.getItem('dsh-ui-progress-sound-muted') === '1')
