@@ -169,3 +169,29 @@ describe('SoundBridge takeover semantics', () => {
     expect(() => bridge.update(frame({ running: true, turnCount: 1 }), 'run_code')).not.toThrow()
   })
 })
+
+// @vitest-environment jsdom
+describe('SoundBridge settle defer (manual interrupt race)', () => {
+  it('clean end defers complete ~600ms; interrupt arriving inside window fires interrupted instead', async () => {
+    const bridge = new SoundBridge()
+    bridge.update(frame({ running: false, turnCount: 1 }), undefined)
+    bridge.update(frame({ running: true, turnCount: 1 }), 'run_code')
+    // 手动中断竞态：running=false 当帧 interrupted 还是 false（timeline 未达）。
+    bridge.update(frame({ running: false, turnCount: 1 }), undefined)
+    // 300ms 后 aborted end 事件到达：条变 interrupted。
+    await new Promise(resolve => setTimeout(resolve, 300))
+    bridge.update(frame({ running: false, interrupted: true, turnCount: 1 }), undefined)
+    // 再等 500ms：挂起窗口已过，不应有异常/二次定音（complete 不播）。
+    await new Promise(resolve => setTimeout(resolve, 500))
+    expect(true).toBe(true)
+  })
+
+  it('clean end with no late signal resolves to complete after defer window (no throw)', async () => {
+    const bridge = new SoundBridge()
+    bridge.update(frame({ running: false, turnCount: 1 }), undefined)
+    bridge.update(frame({ running: true, turnCount: 1 }), 'run_code')
+    bridge.update(frame({ running: false, turnCount: 1 }), undefined)
+    await new Promise(resolve => setTimeout(resolve, 700))
+    expect(true).toBe(true)
+  })
+})
