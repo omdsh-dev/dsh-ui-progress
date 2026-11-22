@@ -135,11 +135,12 @@ const TONES: Record<SoundEvent, Tone> = {
     { t0: 0.22, freq: F.C6 * 2.4, dur: 0.15, volume: 0.07 },
   ],
   // 增五度交替（F5-B5 ×2，断奏方波）——不协和的点状警示。
+  // 音量 0.09-0.11 实测过轻（其他事件 0.22-0.3）——提到 0.2 档并稍加长，保留断奏点状感。
   sandbox: [
-    { t0: 0, freq: F.F5, dur: 0.07, volume: 0.09, type: 'square' },
-    { t0: 0.09, freq: F.B5, dur: 0.07, volume: 0.1, type: 'square' },
-    { t0: 0.22, freq: F.F5, dur: 0.07, volume: 0.09, type: 'square' },
-    { t0: 0.31, freq: F.B5, dur: 0.12, volume: 0.11, type: 'square' },
+    { t0: 0, freq: F.F5, dur: 0.09, volume: 0.2, type: 'square' },
+    { t0: 0.11, freq: F.B5, dur: 0.09, volume: 0.22, type: 'square' },
+    { t0: 0.26, freq: F.F5, dur: 0.09, volume: 0.2, type: 'square' },
+    { t0: 0.37, freq: F.B5, dur: 0.14, volume: 0.24, type: 'square' },
   ],
 }
 
