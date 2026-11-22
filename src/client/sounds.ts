@@ -289,8 +289,6 @@ export class SoundBridge {
   private cue = new SoundCue()
   private edge: SoundEdgeState | null = null
   private lastTool: string | undefined = undefined
-  private takeoverTimer: number | undefined = undefined
-  private takeoverArmed = false
 
   /** 静音状态（进度条按钮切换；持久化由调用方做）。 */
   setMuted(muted: boolean): void {
@@ -324,40 +322,23 @@ export class SoundBridge {
     if (ev !== null) this.cue.play(ev)
   }
 
-  /**
-   * 进度条挂载：取消未决的接管音（快速重挂载=会话切换，非卡片）。
-   */
+  /** 进度条挂载：仅日志（接管启发式已移除）。 */
   markMounted(): void {
     dbg('strip mounted')
-    if (this.takeoverTimer !== undefined) {
-      window.clearTimeout(this.takeoverTimer)
-      this.takeoverTimer = undefined
-    }
-    this.takeoverArmed = false
   }
 
   /**
-   * 进度条卸载：运行中卸载视为卡片接管——600ms 内未重挂载则播放对应
-   * 音，并把边沿状态推进到「已待决」防止重挂载重复响。
-   * @param frame - 卸载时的最后帧。
+   * 进度条卸载：仅记录，不发声。
+   *
+   * 原实现把「运行中卸载」当卡片接管信号（600ms 未重挂载播沙箱/提问
+   * 音）——后经实测证伪：审批/提问卡并不会卸载本条（帧日志在卡片期间
+   * 连续输出），真正触发卸载的是切换会话/切走页面等场景，该启发式只
+   * 会误报（运行中切会话 600ms 后凭空响起沙箱音）。待决检测已由
+   * useSessionStatus 精确通道接管，本方法保留为空操作以兼容调用方。
+   * @param frame - 卸载时的最后帧（未使用）。
    */
   markUnmounted(frame: SoundFrame): void {
-    if (!frame.running || this.takeoverTimer !== undefined) return
-    dbg('unmount while running — arming takeover (tool=' + String(this.lastTool) + ')')
-    this.takeoverArmed = true
-    this.takeoverTimer = window.setTimeout(() => {
-      this.takeoverTimer = undefined
-      if (!this.takeoverArmed) return
-      this.takeoverArmed = false
-      // 定音：ask_user_question 卡片=提问；其余在跑工具被停=审批/沙箱。
-      const ev: SoundEvent = this.lastTool !== undefined && this.lastTool.includes('ask') ? 'attention' : 'sandbox'
-      dbg('takeover fired → ' + ev)
-      this.cue.play(ev)
-      // 边沿推进到「已待决」：重挂载后真实帧（pending=true）不再触发。
-      if (this.edge !== null) {
-        this.edge.prev = { ...frame, pending: true, sandboxPending: ev === 'sandbox' }
-        this.edge.lastFired = ev
-      }
-    }, 600)
+    void frame
+    dbg('strip unmounted (no sound — takeover heuristic removed)')
   }
 }
