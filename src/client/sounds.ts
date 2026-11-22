@@ -13,7 +13,7 @@
 import type { PendingKind } from './SessionProgressBar.tsx'
 
 /** 调试开关：控制台输出声音桥事件（提示音排查用）。 */
-export const SOUND_DEBUG = false
+export const SOUND_DEBUG = true
 
 function dbg(msg: string): void {
   if (SOUND_DEBUG) console.log('[dsh-ui-progress/sound] ' + msg)
@@ -38,6 +38,8 @@ export interface SoundFrame {
   errored: boolean
   /** 是否完成过至少一个回合（用于完成音的判定）。 */
   turnCount: number
+  /** 主回合已收束但后台（子代理/任务）仍在跑（条的天蓝态）——完成音必须等它也结束。 */
+  background: boolean
   /** 会话状态快照里的待决种类（精确通道）；不可用为 null。 */
   statusKind: string | null
   /** 当前在跑的工具是否为 ask 类（启发式回退通道）。 */
@@ -87,7 +89,7 @@ export function nextSoundEvent(state: SoundEdgeState, frame: SoundFrame): SoundE
   // 2) 回合收束：中断或错误（API 限流/供应商失败）都响——都是「任务意外停了」。
   else if (prev.running && !frame.running && (frame.interrupted || frame.errored)) fire = 'interrupted'
   // 3) 回合收束：干净完成（errored 优先级归入 interrupted 同级但不响完成音）。
-  else if (prev.running && !frame.running && !frame.interrupted && !frame.errored && frame.turnCount > 0) fire = 'complete'
+  else if (prev.running && !frame.running && !frame.interrupted && !frame.errored && frame.turnCount > 0 && !frame.background) fire = 'complete'
   state.prev = frame
   if (fire !== null && fire === state.lastFired) {
     // 同一事件去抖：状态未离开过该事件就不重复响。
@@ -255,6 +257,7 @@ export function soundFrameOf(
   turnCount: number,
   statusKind: string | null = null,
   runningTool: string | undefined = undefined,
+  background = false,
 ): SoundFrame {
   const askTool = runningTool !== undefined && runningTool.includes('ask')
   // 精确通道优先：状态快照的 kind；否则旧席位近似；提问类工具回退。
@@ -270,6 +273,7 @@ export function soundFrameOf(
     turnCount,
     statusKind,
     askTool,
+    background,
   }
 }
 

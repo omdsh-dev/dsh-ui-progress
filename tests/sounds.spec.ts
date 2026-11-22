@@ -12,6 +12,7 @@ function frame(over: Partial<SoundFrame> = {}): SoundFrame {
     turnCount: 1,
     statusKind: null,
     askTool: false,
+    background: false,
     ...over,
   }
 }
@@ -193,5 +194,16 @@ describe('SoundBridge settle defer (manual interrupt race)', () => {
     bridge.update(frame({ running: false, turnCount: 1 }), undefined)
     await new Promise(resolve => setTimeout(resolve, 700))
     expect(true).toBe(true)
+  })
+})
+
+describe('settle holds during background (manual interrupt teal phase)', () => {
+  it('complete edge requires background=false — background frames settle to nothing', () => {
+    // 模拟：running→(background=true)→interrupted —— 边沿机在 background 帧不定音，
+    // 中断到达后 running=false→false 之间的 interrupted 边沿由 bridge 持有 prev=running 帧触发。
+    const st = createSoundEdgeState(frame({ running: true }))
+    expect(nextSoundEvent(st, frame({ running: false, background: true }))).toBe(null)
+    expect(nextSoundEvent(st, frame({ running: false, background: true }))).toBe(null)
+    // bridge 层：prev 仍为 running 帧，中断到达即触发（不经 nextSoundEvent 的 running 边沿）。
   })
 })

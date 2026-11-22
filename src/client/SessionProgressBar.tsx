@@ -308,7 +308,7 @@ export function SessionProgressBar({
   // 审批/提问卡片顶掉 composer 槽位时本组件卸载，桥跨卸载存活并按
   // 「运行中卸载=卡片接管」定音（ask_user_question→钟声，其余→沙箱音）。
   const [soundMuted, setSoundMuted] = useState(() => window.localStorage.getItem('dsh-ui-progress-sound-muted') === '1')
-  const frame = soundFrameOf(running, pending, ownPending, interrupted, errored, turn, statusKind, toolName)
+  const frame = soundFrameOf(running, pending, ownPending, interrupted, errored, turn, statusKind, toolName, background)
   useEffect(() => {
     bridge.registerUnlock()
     bridge.setMuted(window.localStorage.getItem('dsh-ui-progress-sound-muted') === '1')
