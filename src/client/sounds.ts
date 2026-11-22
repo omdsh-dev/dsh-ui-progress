@@ -88,6 +88,9 @@ export function nextSoundEvent(state: SoundEdgeState, frame: SoundFrame): SoundE
   else if (frame.pending && prev.pending && !prev.sandboxPending && frame.sandboxPending) fire = 'sandbox'
   // 2) 回合收束：中断或错误（API 限流/供应商失败）都响——都是「任务意外停了」。
   else if (prev.running && !frame.running && (frame.interrupted || frame.errored)) fire = 'interrupted'
+  // 迟到的中断信号：running 已在早前帧翻 false（天蓝 background 态推进了 prev），
+  // interrupted 标记此刻才升起——按上升沿触发，不依赖 prev.running。
+  else if (!prev.interrupted && !prev.errored && (frame.interrupted || frame.errored) && frame.turnCount > 0) fire = 'interrupted'
   // 3) 回合收束：干净完成（errored 优先级归入 interrupted 同级但不响完成音）。
   else if (prev.running && !frame.running && !frame.interrupted && !frame.errored && frame.turnCount > 0 && !frame.background) fire = 'complete'
   state.prev = frame
@@ -318,10 +321,50 @@ export class SoundBridge {
    * @param frame - 帧摘要。
    * @param runningTool - 当前在跑的工具名（卸载定音用）。
    */
+  /** 收束延迟定音计时器。 */
+  private settleTimer: number | undefined = undefined
+  /** 挂起期间最新的干净收束帧。 */
+  private lastSettleFrame: SoundFrame | null = null
+
   update(frame: SoundFrame, runningTool: string | undefined): void {
-    dbg('frame run=' + String(frame.running) + ' pend=' + String(frame.pending) + ' tool=' + String(runningTool))
+    dbg('frame run=' + String(frame.running) + ' pend=' + String(frame.pending) + ' bg=' + String(frame.background) + ' tool=' + String(runningTool))
     this.lastTool = runningTool
     this.edge = this.edge ?? createSoundEdgeState(frame)
+    // 完成音延迟定音：主回合干净收束（running→false、无中断标记）不立即
+    // 响——手动中断时 aborted 信号会迟到（常见路径：先转天蓝 background
+    // 态，随后才橘红）。天蓝期间完全挂起；空闲后挂 1500ms，窗口内中断/
+    // 错误升起（上升沿）立即播中断音。
+    const settling = this.lastSettleFrame !== null || (this.edge.prev.running && !frame.running)
+    const clean = !frame.interrupted && !frame.errored
+    if (settling && clean && !frame.running && frame.turnCount > 0) {
+      if (frame.background) {
+        if (this.settleTimer !== undefined) { window.clearTimeout(this.settleTimer); this.settleTimer = undefined }
+        this.lastSettleFrame = frame
+        dbg('settling held — background active')
+        return
+      }
+      this.lastSettleFrame = frame
+      if (this.settleTimer === undefined) {
+        dbg('settle clean — deferring complete tone 1500ms')
+        this.settleTimer = window.setTimeout(() => {
+          this.settleTimer = undefined
+          const latest = this.lastSettleFrame
+          this.lastSettleFrame = null
+          if (latest === null || this.edge === null) return
+          const ev = nextSoundEvent(this.edge, latest)
+          dbg('settle resolved → ' + String(ev))
+          if (ev !== null) this.cue.play(ev)
+        }, 1500)
+      }
+      return
+    }
+    // 中断/错误升起（含窗口内到达）：取消挂起，立即定音。
+    if (this.settleTimer !== undefined || this.lastSettleFrame !== null) {
+      window.clearTimeout(this.settleTimer)
+      this.settleTimer = undefined
+      this.lastSettleFrame = null
+      dbg('interrupt arrived within settle window — firing now')
+    }
     const ev = nextSoundEvent(this.edge, frame)
     if (ev !== null) this.cue.play(ev)
   }

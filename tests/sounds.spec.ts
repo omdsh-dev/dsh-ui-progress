@@ -204,6 +204,7 @@ describe('settle holds during background (manual interrupt teal phase)', () => {
     const st = createSoundEdgeState(frame({ running: true }))
     expect(nextSoundEvent(st, frame({ running: false, background: true }))).toBe(null)
     expect(nextSoundEvent(st, frame({ running: false, background: true }))).toBe(null)
-    // bridge 层：prev 仍为 running 帧，中断到达即触发（不经 nextSoundEvent 的 running 边沿）。
+    // 迟到中断：prev 已是 running=false（background 帧推进过），上升沿仍须触发。
+    expect(nextSoundEvent(st, frame({ running: false, background: false, interrupted: true }))).toBe('interrupted')
   })
 })
