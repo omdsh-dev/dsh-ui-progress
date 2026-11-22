@@ -13,7 +13,7 @@
 import type { PendingKind } from './SessionProgressBar.tsx'
 
 /** 调试开关：控制台输出声音桥事件（提示音排查用）。 */
-export const SOUND_DEBUG = true
+export const SOUND_DEBUG = false
 
 function dbg(msg: string): void {
   if (SOUND_DEBUG) console.log('[dsh-ui-progress/sound] ' + msg)
