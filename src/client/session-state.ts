@@ -210,8 +210,14 @@ export function latestTurnStop(
   legacy: ChatLegacy,
   lastAgentError: string | null,
 ): TurnStop | null {
-  if (lastAgentError !== null) return { kind: 'error', cause: classifyErrorText(lastAgentError) }
   // Authoritative turn/end reason when the timeline is available.
+  // NOTE: lastAgentError is checked AFTER the timeline on purpose. A mid-turn
+  // 429 that the harness retried successfully leaves a stale lastAgentError
+  // while the turn ends cleanly — leading the strip to show an error stop
+  // (and fire the interrupted tone) for a turn that actually completed.
+  // When the timeline's latest turn ended with an explicit clean reason,
+  // the stale agent error is suppressed; it is only trusted when the
+  // timeline is unavailable, has no end reason, or the turn truly errored.
   const turns = chat?.timeline.turns
   if (turns !== undefined) {
     const sorted = [...turns.entries()].sort((a, b) => a[0] - b[0])
@@ -237,6 +243,8 @@ export function latestTurnStop(
       return null
     }
   }
+  // Timeline absent or no end reason: fall back to the live agent error.
+  if (lastAgentError !== null) return { kind: 'error', cause: classifyErrorText(lastAgentError) }
   // The latest completed in-window turn and the end seq of the turn before
   // it: the previous end seq is the exact lower boundary for the latest
   // turn's own nodes (every later turn's events sit above it).

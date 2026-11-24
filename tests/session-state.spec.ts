@@ -217,4 +217,18 @@ describe('classifyErrorText', () => {
     expect(stop({ lastAgentError: 'Error 429: rate limit hit' })).toEqual({ kind: 'error', cause: 'ratelimit' })
     expect(stop({ lastAgentError: 'Invalid API key provided' })).toEqual({ kind: 'error', cause: 'apikey' })
   })
+
+  it('a stale lastAgentError is suppressed when the timeline latest turn ended cleanly', () => {
+    // 回归：回合中一次 429 被 harness 重试成功、回合干净收尾（reason 非
+    // error/interrupted），但 session.lastAgentError 仍留着错误文本——
+    // 旧实现把 lastAgentError 排在时间线之前短路，导致干净完成被渲染成
+    // 错误停（条橙红 + 中断音）。时间线的干净收尾现在优先。
+    expect(stop({ reason: 'completed', lastAgentError: 'Error 429: rate limit hit' })).toBeNull()
+    expect(stop({ reason: 'max_tokens', lastAgentError: 'Error 429: rate limit hit' })).toBeNull()
+  })
+
+  it('a stale lastAgentError still surfaces when the timeline has no end reason', () => {
+    // 时间线不可用/无 end reason（旧宿主）时，lastAgentError 仍是唯一信号。
+    expect(stop({ lastAgentError: 'Error 429: rate limit hit' })).toEqual({ kind: 'error', cause: 'ratelimit' })
+  })
 })
