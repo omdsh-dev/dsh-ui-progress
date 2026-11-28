@@ -382,7 +382,6 @@ export function SessionProgressBar({
           {running && !pending && <div className={css.shimmer} />}
         </div>
         <span className={css.percent}>{percent}%</span>
-        <button type="button" className={css.soundToggle} onClick={toggleSound} title={soundMuted ? '开启提示音' : '静音提示音'} aria-label={soundMuted ? '开启提示音' : '静音提示音'}>{soundMuted ? '\u{1F507}' : '\u{1F514}'}</button>
         {/* The meta group keeps the trailing counters as one unbreakable
             flex item: at narrow composer widths the whole group wraps to a
             second line right after the percent instead of cramming one row. */}
