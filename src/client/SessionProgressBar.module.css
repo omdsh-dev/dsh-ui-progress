@@ -55,6 +55,14 @@
   margin-inline: auto;
 }
 
+/* 极窄屏（手机）：token 用量芯片放不下时退场，保住轮次/工具计数与铃铛。
+   计数组（含铃铛）整体换行居中，进度条保持可用宽度。 */
+@media (max-width: 420px) {
+  .tokenChip {
+    display: none;
+  }
+}
+
 /* Running state: a soft brand-colored halo pulses around the bar. */
 .bar[data-state='running'] {
   border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 40%, transparent);
@@ -222,7 +230,9 @@
 .track {
   position: relative;
   flex: 1;
-  min-width: 60px;
+  /* 换行阈值调宽：track 保持 >=120px，窄屏放不下时 meta 组（含铃铛）
+     整体换行到第二行，进度条保住第一行剩余宽度，不再挤成 60px 细条。 */
+  min-width: 120px;
   height: 6px;
   border-radius: 999px;
   background: var(--dsw-alias-bg-layer-2);
@@ -350,6 +360,8 @@
 
 /* 提示音开关：与百分比同行的小按钮，静音态降不透明度。 */
 .soundToggle {
+  /* 常规行尾元素（在 meta 组内）：随计数组一起换行，永不孤行。 */
+  flex: none;
   background: none;
   border: none;
   padding: 0 2px;

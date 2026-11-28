@@ -407,10 +407,10 @@ export function SessionProgressBar({
               {formatTokenCount(tokenTotals.total)}
             </button>
           )}
+          {/* 铃铛放进 meta 组末位：与计数组同为一个不可断 flex 项——窄屏换行时
+              「统计文字 + 铃铛」一起换到第二行，绝不出现孤铃铛行；宽屏仍在行尾。 */}
+          <button type="button" className={css.soundToggle} onClick={toggleSound} title={soundMuted ? '开启提示音' : '静音提示音'} aria-label={soundMuted ? '开启提示音' : '静音提示音'}>{soundMuted ? '\u{1F507}' : '\u{1F514}'}</button>
         </div>
-        {/* 静音按钮放条带末尾（meta 之后）：窄屏（移动端）meta 换行到第二行时
-            按钮跟随换行到末尾，不再悬空在第一行「100%」与统计文字之间。 */}
-        <button type="button" className={css.soundToggle} onClick={toggleSound} title={soundMuted ? '开启提示音' : '静音提示音'} aria-label={soundMuted ? '开启提示音' : '静音提示音'}>{soundMuted ? '\u{1F507}' : '\u{1F514}'}</button>
       </div>
       {tokenTotals !== null && tokenTotals.total > 0 && tokenPanelOpen && (
         <div className={css.tokenPanel} role="dialog" aria-label={t('token.total')}
